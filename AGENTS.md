@@ -47,7 +47,8 @@ roots, model bridges, browser profiles, or agent homes outside the documented ow
 ## Current phase
 
 Read-only inspection remains the default surface. The only mutations are the
-named actions in `src/actions.mjs`: OCX start/sync/stop and GPT account routing.
+named actions in `src/actions.mjs`: guarded Native/bridge route recovery, OCX
+start/sync/stop, OpenAI provider policy, and GPT account routing.
 Every control-plane mutation requires a fresh preview, one-use confirmation token,
 one-writer lock, pre-state match, and post-action verification. Tests must use
 fake runners; never switch a real account or stop a live OCX during validation.

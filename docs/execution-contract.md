@@ -2,9 +2,10 @@
 
 ## AICC 제어면
 
-계정과 OCX 변경은 이름이 고정된 action만 사용한다. 미리보기, 짧게 유효한 일회용
-토큰, 단일 writer lock, 실행 전 상태 비교, 실행 후 검증과 복구를 거친다. AICC 웹
-API는 loopback·동일 출처·JSON 요청만 허용한다.
+계정, OCX와 Codex 모델 경로 변경은 이름이 고정된 action만 사용한다. 미리보기,
+짧게 유효한 일회용 토큰, 단일 writer lock, 실행 전 상태 비교, 실행 후 검증과 복구를
+거친다. Native/bridge route action은 진행 중 Web turn이 있으면 거부하고, 검증 실패 시
+실행 전 route로 rollback한다. AICC 웹 API는 loopback·동일 출처·JSON 요청만 허용한다.
 
 ## Workspace MCP 데이터면
 
@@ -20,3 +21,5 @@ lease를 얻어야 한다. 읽기, 검색, 패치, 명령, Git 변경 검토와 
 - OCX 10100 health와 비대상 provider 보존
 - `aicc agents check`, `aicc guidance check`
 - 실제 ChatGPT connector의 workspace 목록·읽기·쓰기 호출
+- `routes.status`, `web-gpt.doctor`, `ocx.diagnostics`, `support.bundle`의 비밀 제외 결과
+- 대시보드 CSP 오류 0건과 desktop/mobile 문제해결 화면

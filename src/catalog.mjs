@@ -118,6 +118,30 @@ const items = Object.freeze([
     command: 'aicc cli status', mode: 'command', taskId: 'cli.status', keywords: ['cli', 'routing', '연결']
   },
   {
+    id: 'routes-status', group: 'system', title: 'Codex 모델 경로 점검',
+    description: 'Native, Web GPT 17841, OCX 10100의 현재 연결과 안전한 복구 준비 상태를 확인합니다.',
+    command: 'aicc task run routes.status', mode: 'command', taskId: 'routes.status', featured: true,
+    webSection: 'troubleshoot', keywords: ['native', 'web gpt', 'ocx', 'route', '포트', '경로', '복구']
+  },
+  {
+    id: 'support-bundle', group: 'system', title: '상담용 통합 진단 묶음',
+    description: '계정·토큰을 제외한 경로, 브리지, OCX, Workspace 상태와 안전한 명령을 한 번에 정리합니다.',
+    command: 'aicc task run support.bundle', mode: 'command', taskId: 'support.bundle', featured: true,
+    webSection: 'troubleshoot', keywords: ['support', 'copy', 'diagnostic', 'web gpt', '상담', '복사', '진단']
+  },
+  {
+    id: 'web-gpt-doctor', group: 'system', title: 'Web GPT 브리지 정밀 진단',
+    description: '17841 브리지, 브라우저 로그인, Tunnel과 작업 하네스를 독립적으로 점검합니다.',
+    command: 'codex-chatgpt-web doctor --json', mode: 'command', taskId: 'web-gpt.doctor',
+    webSection: 'troubleshoot', keywords: ['17841', 'bridge', 'tunnel', 'web gpt', '브리지', '진단']
+  },
+  {
+    id: 'ocx-diagnostics', group: 'system', title: 'OCX 독립 진단',
+    description: 'OCX 내부 경고를 별도로 확인하며 AICC와 Web GPT 구역은 건드리지 않습니다.',
+    command: 'ocx system diagnostics --json', mode: 'command', taskId: 'ocx.diagnostics',
+    webSection: 'troubleshoot', keywords: ['10100', 'ocx', 'diagnostics', 'provider', '진단']
+  },
+  {
     id: 'cli-setup', group: 'system', title: '필요한 CLI 설치·연결',
     description: '검증된 고정 버전을 설치하고 OCX 연결을 준비합니다.',
     command: 'aicc cli setup --install-missing', mode: 'command', confirm: true, keywords: ['install', 'repair', '설치', '수리']

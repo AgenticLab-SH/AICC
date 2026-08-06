@@ -8,6 +8,10 @@ test('diagnostic task allowlist is explicit', () => {
   assert.ok(ids.includes('workspace.publish-preflight'));
   assert.ok(ids.includes('agents.status'));
   assert.ok(ids.includes('guidance.check'));
+  assert.ok(ids.includes('routes.status'));
+  assert.ok(ids.includes('support.bundle'));
+  assert.ok(ids.includes('web-gpt.doctor'));
+  assert.ok(ids.includes('ocx.diagnostics'));
   assert.equal(ids.includes('shell'), false);
 });
 

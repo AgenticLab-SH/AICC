@@ -50,6 +50,8 @@ Usage:
   aicc cli status       codex·claude·OCX CLI 연결 상태 확인
   aicc cli setup [--install-missing]
                        고정 버전 CLI 설치와 OCX 연결 설정
+  aicc task run <진단ID> [--json]
+                       허용된 읽기 전용 진단 작업 실행
   aicc openai usage [--json]
                        무료 토큰 로컬 원장과 95% 하드 한도 확인
   aicc openai provider [--json]
@@ -73,7 +75,7 @@ Usage:
 
 호환: cm ... = aicc account ... · aicc --accounts · aicc --account-status
 
-Actions: ocx.start, ocx.sync, ocx.stop, account.switch, ocx.account.use, ocx.account.import-cm`);
+Actions: codex.native.recover, codex.bridge.reconnect, ocx.start, ocx.sync, ocx.stop, account.switch, ocx.account.use, ocx.account.import-cm`);
 }
 
 async function ask(question) {
@@ -361,6 +363,16 @@ async function main() {
         : null;
     if (!result) throw new Error(`알 수 없는 cli 명령: ${subcommand}`);
     printCliStatus(result);
+    if (!result.ok) process.exitCode = 1;
+    return;
+  }
+  if (command === 'task') {
+    const subcommand = process.argv[3] || 'run';
+    const taskId = process.argv[4];
+    if (subcommand !== 'run' || !taskId) throw new Error('사용법: aicc task run <진단ID> [--json]');
+    const result = await runTask(taskId);
+    if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+    else printJsonOrSummary(result);
     if (!result.ok) process.exitCode = 1;
     return;
   }

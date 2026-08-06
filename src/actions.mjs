@@ -10,6 +10,7 @@ import { runCommand } from './lib/command.mjs';
 import { redactText, sanitize } from './lib/redact.mjs';
 import { defaultPythonCommand } from './config.mjs';
 import { openaiProviderSnapshot, openaiProviderStatus } from './openai-usage.mjs';
+import { codexRouteStatus } from './adapters/codex-routes.mjs';
 
 const previewLifetimeMs = 2 * 60 * 1000;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -46,6 +47,18 @@ function ocxSnapshot(status) {
     healthy: Boolean(status?.healthy),
     version: status?.version ?? null,
     port: status?.runtime?.port ?? null
+  };
+}
+
+function routeSnapshot(status) {
+  return {
+    activeRoute: status?.activeRoute ?? 'unknown',
+    routeUrl: status?.routeUrl ?? null,
+    nativeReady: status?.nativeReady === true,
+    bridgeHealthy: status?.webGpt?.healthy === true,
+    bridgeAcceptingTurns: status?.webGpt?.acceptingTurns === true,
+    activeTurns: Number.isFinite(status?.webGpt?.activeTurns) ? status.webGpt.activeTurns : null,
+    ocxHealthy: status?.ocx?.healthy === true
   };
 }
 
@@ -172,10 +185,66 @@ function buildDefinitions(options) {
   delete ocxEnvironment.CODEX_ELECTRON_USER_DATA_PATH;
   delete ocxEnvironment.CODEX_MULTI_ACCOUNT_NAME;
   const ocxCommand = args => ({ executable: ocxExecutable, args, env: ocxEnvironment });
+  const webGptExecutable = options.webGptExecutable
+    ?? inheritedEnvironment.AICC_WEB_GPT_CLI?.trim()
+    ?? '/Applications/Codex Web GPT.app/Contents/Resources/runtime/bin/codex-chatgpt-web';
+  const webGptCommand = args => ({ executable: webGptExecutable, args, env: inheritedEnvironment });
   const providerEnvironment = { ...inheritedEnvironment, AICC_STATE_ROOT: options.stateRoot };
   const openaiCommand = args => ({ executable: process.execPath, args: [openaiProviderCommand, ...args], env: providerEnvironment });
   const accountSwitchCommand = options.accountSwitchCommand ?? defaultAccountSwitchCommand;
   return {
+    'codex.native.recover': {
+      title: 'Native Codex로 긴급 복구',
+      kind: 'route',
+      readState: options.getCodexRouteStatus,
+      snapshot: routeSnapshot,
+      prepare(_args, state) {
+        if (!state.nativeReady) throw new ActionError('native_profile_unavailable', '검증된 Native Codex 복구 프로필이 없습니다.', 409);
+        if (Number(state.webGpt?.activeTurns ?? 0) > 0) throw new ActionError('active_turns', 'Web GPT 작업이 진행 중이라 모델 경로를 바꾸지 않았습니다.', 409);
+        if (state.activeRoute === 'native') throw new ActionError('already_native', '이미 Native Codex 경로를 사용하고 있습니다.', 409);
+        return {};
+      },
+      describe: () => ({
+        impact: 'Codex 모델 경로를 Web GPT·OCX에서 분리해 OpenAI 공식 Native endpoint로 복구합니다.',
+        warnings: ['현재 Codex Desktop 응답이 끝난 뒤 실행해야 합니다.', '경로 변경 뒤 Codex Desktop을 완전히 종료하고 다시 열어야 합니다.', 'OCX와 Web GPT 서비스 자체는 중지하지 않습니다.'],
+        rollback: '17841 브리지가 정상일 때 “통합 모델 경로 다시 연결”을 실행하면 Web GPT와 OCX 모델 선택기로 돌아갑니다.'
+      }),
+      command: () => ocxCommand(['restore']),
+      verifyAttempts: 4,
+      verifyDelayMs: 250,
+      verify: (state, _args, _before, result) => Boolean(result.ok && state.activeRoute === 'native'),
+      rollback: before => before.activeRoute === 'web-gpt'
+        ? webGptCommand(['route', 'connect'])
+        : before.activeRoute === 'ocx'
+          ? ocxCommand(['restore', 'back'])
+          : null
+    },
+    'codex.bridge.reconnect': {
+      title: '통합 모델 경로 다시 연결',
+      kind: 'route',
+      readState: options.getCodexRouteStatus,
+      snapshot: routeSnapshot,
+      prepare(_args, state) {
+        if (!state.webGpt?.healthy || !state.webGpt?.acceptingTurns) throw new ActionError('bridge_unavailable', '17841 Web GPT 브리지가 준비되지 않아 연결하지 않았습니다.', 409);
+        if (Number(state.webGpt?.activeTurns ?? 0) > 0) throw new ActionError('active_turns', 'Web GPT 작업이 진행 중이라 모델 경로를 바꾸지 않았습니다.', 409);
+        if (state.activeRoute === 'web-gpt') throw new ActionError('already_connected', '이미 통합 모델 경로를 사용하고 있습니다.', 409);
+        return {};
+      },
+      describe: () => ({
+        impact: 'Codex Desktop의 모델 선택기를 17841 브리지에 다시 연결합니다. Web 모델은 ChatGPT Web, 그 밖의 모델은 OCX로 분기됩니다.',
+        warnings: ['경로 변경 뒤 Codex Desktop을 완전히 종료하고 다시 열어야 합니다.', 'OCX가 꺼져 있으면 Web 이외 모델만 사용할 수 없습니다.'],
+        rollback: '검증에 실패하면 실행 전 Native 또는 OCX 직접 경로로 되돌립니다.'
+      }),
+      command: () => webGptCommand(['route', 'connect']),
+      verifyAttempts: 4,
+      verifyDelayMs: 250,
+      verify: (state, _args, _before, result) => Boolean(result.ok && state.activeRoute === 'web-gpt'),
+      rollback: before => before.activeRoute === 'native'
+        ? ocxCommand(['restore'])
+        : before.activeRoute === 'ocx'
+          ? ocxCommand(['restore', 'back'])
+          : null
+    },
     'ocx.start': {
       title: 'OCX 시작',
       kind: 'provider',
@@ -395,6 +464,7 @@ export function createActionController(options = {}) {
     platform: options.platform ?? process.platform,
     arch: options.arch ?? process.arch,
     getOcxStatus: options.getOcxStatus ?? (() => ocxStatus(options.ocx)),
+    getCodexRouteStatus: options.getCodexRouteStatus ?? (() => codexRouteStatus(options.codexRoutes)),
     getAccountStatus: options.getAccountStatus ?? (() => accountStatus(options.accounts)),
     getOcxAccountStatus: options.getOcxAccountStatus ?? (() => ocxAccountStatus(options.ocxAccounts)),
     getOpenaiProviderStatus: options.getOpenaiProviderStatus ?? (() => openaiProviderStatus({ env: { ...process.env, AICC_STATE_ROOT: stateRoot } }))

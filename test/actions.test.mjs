@@ -31,6 +31,8 @@ test('allowlist exposes only named actions', () => {
     getAccountStatus: async () => ({})
   });
   assert.deepEqual(controller.list().map(item => item.name), [
+    'codex.native.recover',
+    'codex.bridge.reconnect',
     'ocx.start',
     'ocx.sync',
     'ocx.stop',
@@ -41,6 +43,49 @@ test('allowlist exposes only named actions', () => {
     'openai.model.set',
     'openai.default-model.set',
     'openai.model.probe'
+  ]);
+});
+
+test('Native recovery is blocked while a Web GPT turn is active', async t => {
+  const controller = createActionController({
+    stateRoot: temporaryState(t),
+    getOcxStatus: async () => ({}),
+    getAccountStatus: async () => ({}),
+    getCodexRouteStatus: async () => ({
+      activeRoute: 'web-gpt', nativeReady: true,
+      webGpt: { healthy: true, acceptingTurns: true, activeTurns: 1 }, ocx: { healthy: true }
+    })
+  });
+  await assert.rejects(controller.preview('codex.native.recover'), error => error.code === 'active_turns');
+});
+
+test('Native recovery and bridge reconnect use guarded route owners', async t => {
+  const stateRoot = temporaryState(t);
+  let activeRoute = 'web-gpt';
+  const calls = [];
+  const controller = createActionController({
+    stateRoot,
+    ocxExecutable: 'ocx-fixture',
+    webGptExecutable: 'web-gpt-fixture',
+    getOcxStatus: async () => ({}),
+    getAccountStatus: async () => ({}),
+    getCodexRouteStatus: async () => ({
+      activeRoute, routeUrl: activeRoute === 'web-gpt' ? 'http://127.0.0.1:17841/v1' : 'https://chatgpt.com/backend-api/codex',
+      nativeReady: true, webGpt: { healthy: true, acceptingTurns: true, activeTurns: 0 }, ocx: { healthy: true }
+    }),
+    runCommand: async (executable, args) => {
+      calls.push([executable, args]);
+      activeRoute = executable === 'ocx-fixture' ? 'native' : 'web-gpt';
+      return commandResult();
+    }
+  });
+  const nativePreview = await controller.preview('codex.native.recover');
+  assert.equal((await controller.execute(nativePreview.confirmationToken)).ok, true);
+  const bridgePreview = await controller.preview('codex.bridge.reconnect');
+  assert.equal((await controller.execute(bridgePreview.confirmationToken)).ok, true);
+  assert.deepEqual(calls, [
+    ['ocx-fixture', ['restore']],
+    ['web-gpt-fixture', ['route', 'connect']]
   ]);
 });
 
