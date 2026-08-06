@@ -11,7 +11,8 @@ import { setupEnvironment } from './setup.mjs';
 import { runGuidance } from './guidance.mjs';
 import { runTui } from './tui.mjs';
 import { runTask } from './tasks.mjs';
-import { configureOpenaiProject, estimateOpenaiRequest, guardedOpenaiResponse, openaiProjectStatus, openaiProviderStatus, openaiUsageStatus } from './openai-usage.mjs';
+import { checkOpenaiCatalog } from './openai-catalog-check.mjs';
+import { configureOpenaiEligibility, configureOpenaiProject, estimateOpenaiRequest, evaluateOpenaiMonitor, guardedOpenaiResponse, openaiMonitorStatus, openaiProjectStatus, openaiProviderStatus, openaiUsageStatus, probeAllOpenaiModels, recordOpenaiOfficialObservation } from './openai-usage.mjs';
 import { checkAgents, deployAgents, planAgents, agentsStatus } from './agents.mjs';
 import { configureWorkspaceMcp, workspaceMcpCommand, workspaceMcpStatus, readWorkspaceMcpConfig, workspaceMcpPaths } from './workspace-mcp.mjs';
 
@@ -57,6 +58,14 @@ Usage:
   aicc openai provider [--json]
                        API 전체 상태·기본 모델·허용 정책 확인
   aicc openai models [--json]
+
+  aicc openai monitor [status|run] [--json]
+
+  aicc openai catalog check [--json]
+
+  aicc openai probe-all --confirm-token-use [--json]
+
+  aicc openai eligibility set --declared 모델1,모델2 --observed 모델3 [--json]
                        공식 무료 대상 모델·가격·실계정 확인 상태 조회
   aicc openai project status [--project 이름] [--json]
                        현재 Git 프로젝트의 일일 예산과 사용량 확인
@@ -401,6 +410,56 @@ async function main() {
         }
         console.log('★ 기본 · ✓ 에이전트 선택 가능 · ○ 사용자 명시 호출만 · 모델별 실제 확인은 AICC 웹의 “연결 확인”을 사용하세요.');
       }
+      return;
+    }
+    if (subcommand === 'monitor') {
+      const monitorCommand = process.argv[4] || 'status';
+      let result;
+      if (monitorCommand === 'status') result = openaiMonitorStatus();
+      else if (monitorCommand === 'run') result = evaluateOpenaiMonitor();
+      else if (monitorCommand === 'observe') result = recordOpenaiOfficialObservation({
+        inputTokens: Number(optionValue('--input-tokens')),
+        outputTokens: Number(optionValue('--output-tokens')),
+        requests: Number(optionValue('--requests')),
+        costUsd: Number(optionValue('--cost-usd') || 0),
+        observedAt: optionValue('--observed-at') || undefined
+      });
+      else throw new Error(`알 수 없는 openai monitor 명령: ${monitorCommand}`);
+      if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+      else {
+        console.log(`OpenAI monitor: ${result.state} · 마지막 확인 ${result.lastEvaluatedAt || '아직 없음'}`);
+        for (const group of result.groups) console.log(`${group.label}: ${group.percent}% · 경고 ${group.warningPercent}% · 자동 정지 ${group.autoPausePercent}%`);
+      }
+      return;
+    }
+    if (subcommand === 'catalog') {
+      const catalogCommand = process.argv[4] || 'check';
+      if (catalogCommand !== 'check') throw new Error(`알 수 없는 openai catalog 명령: ${catalogCommand}`);
+      const result = await checkOpenaiCatalog();
+      if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+      else console.log(`OpenAI catalog: ${result.status} · 공식 ${result.counts?.official ?? '–'} · 추가 ${result.added.length} · 제거 ${result.removed.length}`);
+      if (!result.ok) process.exitCode = 1;
+      return;
+    }
+    if (subcommand === 'probe-all') {
+      if (!process.argv.includes('--confirm-token-use')) throw new Error('계정 무료 대상 모델 전수 확인은 실제 token을 사용합니다. --confirm-token-use를 명시하세요.');
+      const result = await probeAllOpenaiModels({
+        onResult: (item, progress) => {
+          if (!process.argv.includes('--json')) console.error(`[${progress.attempted}/${progress.total}] ${item.model}: ${item.status}${item.usage ? ` · ${item.usage.totalTokens} token` : ''}`);
+        }
+      });
+      console.log(JSON.stringify(result, null, 2));
+      return;
+    }
+    if (subcommand === 'eligibility') {
+      const eligibilityCommand = process.argv[4] || 'status';
+      if (eligibilityCommand !== 'set') throw new Error('openai eligibility는 set 명령과 --declared 목록이 필요합니다.');
+      const result = configureOpenaiEligibility({
+        source: optionValue('--source') || 'authenticated-account-ui',
+        declaredFamilies: String(optionValue('--declared') || '').split(',').filter(Boolean),
+        observedIncentiveModels: String(optionValue('--observed') || '').split(',').filter(Boolean)
+      });
+      console.log(JSON.stringify(result, null, 2));
       return;
     }
     if (subcommand === 'project') {

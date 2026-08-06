@@ -42,7 +42,10 @@ test('allowlist exposes only named actions', () => {
     'openai.provider.set',
     'openai.model.set',
     'openai.default-model.set',
-    'openai.model.probe'
+    'openai.model.probe',
+    'openai.catalog.probe-all',
+    'openai.catalog.check',
+    'openai.agent-guard.apply'
   ]);
 });
 

@@ -6,7 +6,8 @@ description: Safely decide, estimate, integrate, test, and monitor OpenAI API ca
 # AICC 프로젝트 API 연결
 
 프로젝트에 API key를 복사하지 않고 AICC를 로컬 gateway로 사용한다. AICC가 무료 대상
-모델, 전역 95% 하드 정지, 프로젝트 일일 예산, Keychain과 사용량 원장을 소유한다.
+모델, 전역 80% 경고·90% 자동 정지·95% 하드 차단, 프로젝트 일일 예산, Keychain과
+사용량 원장을 소유한다.
 
 ## 판단
 
@@ -16,9 +17,11 @@ description: Safely decide, estimate, integrate, test, and monitor OpenAI API ca
 3. `aicc openai provider --json`과 `aicc openai models --json`을 먼저 읽는다. 모델을
    생략하면 AICC 웹에서 사용자가 지정한 기본 모델을 사용한다. `agentSelectable=false`인
    모델은 에이전트가 임의로 선택하지 않는다.
-4. 정적 프런트엔드에는 API key나 AICC localhost endpoint를 넣지 않는다. 로컬 backend,
+4. `availability.status=available`이 아니거나 현재 계정 eligibility가 검증되지 않은 모델은
+   무료 Help 목록에 있어도 호출하지 않는다.
+5. 정적 프런트엔드에는 API key나 AICC localhost endpoint를 넣지 않는다. 로컬 backend,
    CLI 도구 또는 desktop companion만 AICC subprocess를 호출한다.
-5. 공개 서버에서 호출해야 하면 AICC 로컬 키를 재사용하지 않는다. 별도 server secret,
+6. 공개 서버에서 호출해야 하면 AICC 로컬 키를 재사용하지 않는다. 별도 server secret,
    인증, rate limit, 비용 상한과 배포 승인을 먼저 설계한다.
 
 ## 연결 절차
@@ -30,6 +33,7 @@ description: Safely decide, estimate, integrate, test, and monitor OpenAI API ca
 aicc openai project status --json
 aicc openai provider --json
 aicc openai models --json
+aicc openai monitor status --json
 printf '실제 입력' | aicc openai estimate \
   --max-output 512 --json
 ```
@@ -72,6 +76,10 @@ Git remote가 없는 일회성 작업만 `--project 안전한-별칭`을 쓴다.
   통제한다고 주장하지 않는다.
 - 무료 quota는 모델 가격으로 가중하지 않고 같은 그룹의 input+output 원시 token 합으로
   차감된다. 모델별 사용률은 해당 모델이 공유 풀에서 실제 소비한 몫으로 해석한다.
+- OpenAI Usage 화면은 수 분에 걸쳐 부분 갱신될 수 있으므로 실시간 차단 기준으로 쓰지 않는다.
+  AICC는 호출 전에 입력 상한과 최대 출력을 예약하고 응답 직후 실제 usage로 정산한다.
+- Codex home의 managed hook과 shell environment filter를 제거하거나 raw Keychain/API endpoint로
+  우회하지 않는다. 가드 충돌은 AICC에서 해결하고 조용히 다른 key/provider를 쓰지 않는다.
 
 ## 완료 검증
 
@@ -82,3 +90,5 @@ Git remote가 없는 일회성 작업만 `--project 안전한-별칭`을 쓴다.
    token이 함께 증가했는지 확인한다.
 5. 저장소와 빌드 결과를 secret scanner로 확인한다.
 6. 어떤 기능이 API에 의존하고 한도 초과 시 어떻게 동작하는지 프로젝트 문서에 남긴다.
+7. 장기 작업은 `aicc openai monitor status --json`에서 pending, 경고, 자동 정지 상태를
+   확인하고, catalog drift가 있으면 `aicc openai catalog check --json` 결과를 검토한다.

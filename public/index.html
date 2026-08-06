@@ -289,6 +289,14 @@
             <button id="setOpenaiDefaultModel" type="button" class="secondary">기본 모델로 지정</button>
           </article>
         </div>
+        <article class="openai-monitor-panel" aria-labelledby="openaiMonitorTitle">
+          <div class="openai-monitor-heading">
+            <div><p class="eyebrow">ALWAYS-ON MONITOR</p><h3 id="openaiMonitorTitle">선제 정지와 공식 반영 상태</h3></div>
+            <span id="openaiMonitorState" class="state">확인 중</span>
+          </div>
+          <div id="openaiMonitorSummary" class="openai-monitor-summary"></div>
+          <div class="button-row"><button id="probeAllOpenaiModels" type="button" class="secondary">계정 무료 모델 전수 실호출</button><button id="checkOpenaiCatalog" type="button" class="ghost">공식 catalog 갱신 확인</button><button id="applyOpenaiAgentGuard" type="button" class="ghost">Agent 우회 방지 적용</button></div>
+        </article>
         <article class="openai-model-catalog" aria-labelledby="openaiModelCatalogTitle">
           <div class="openai-model-catalog-head"><div><p class="eyebrow">OFFICIAL COMPLIMENTARY CATALOG</p><h3 id="openaiModelCatalogTitle">무료 대상 모델과 선택 권한</h3></div><div id="openaiModelSummary">공식 목록 확인 중</div></div>
           <div id="openaiModelFilters" class="model-filter-row" role="group" aria-label="OpenAI 모델 필터"></div>
@@ -297,7 +305,7 @@
         </article>
         <div id="openaiUsageGroups" class="usage-groups" aria-live="polite"></div>
         <p id="openaiActionMessage" class="action-message" role="status" aria-live="polite"></p>
-        <p class="usage-explainer">무료 할당량은 모델별이 아니라 두 모델 그룹에서 공유됩니다. AICC는 전역 풀의 95%에서 정지하고, 각 Git 프로젝트는 기본적으로 풀별 10%까지 사용합니다. 공식 무료 대상 목록과 실제 계정 접근 가능 여부는 구분해 표시하며, “연결 확인”은 고정된 비민감 문장으로 최소 API 요청을 보냅니다. 프로젝트는 키를 받지 않고 AICC CLI를 subprocess로 호출하며, 정적 프런트엔드에는 API 키를 넣지 않습니다.</p>
+        <p class="usage-explainer">무료 할당량은 모델별이 아니라 두 모델 그룹에서 공유됩니다. 로그인 시 자동 시작하는 AICC local server가 60초마다 확인하고, 80%에서 경고하며 90%에서 API 전체를 선제 정지합니다. 95% 요청 전 하드 차단은 그대로 유지됩니다. 공식 무료 대상 목록과 실제 계정 접근 가능 여부는 구분해 표시하며, 프로젝트와 에이전트에는 원시 API key를 전달하지 않습니다.</p>
       </section>
 
       <section id="troubleshoot" class="anchor-section" aria-labelledby="troubleshootTitle">

@@ -31,6 +31,9 @@
 - 모델 경로: `manage-codex-model-routes`를 사용하고 활성 task 동안 route를 바꾸거나
   OCX를 재시작하지 않는다. `aicc task run routes.status --json`과
   `support.bundle`을 먼저 사용한다.
+- OpenAI API: 프로젝트는 `use-aicc-openai-api`를 사용하고 raw key를 배포하지 않는다.
+  `aicc openai monitor status --json`의 로컬 예약/정산을 차단 기준으로 삼고 Usage UI는
+  무료 귀속 사후 대조로만 사용한다.
 
 ## 장애 조사와 복구
 

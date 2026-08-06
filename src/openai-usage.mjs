@@ -3,10 +3,13 @@ import crypto from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { openaiAgentGuardStatus } from '../tools/platform/codex/install-openai-api-guard.mjs';
 
 const COMPLIMENTARY_SOURCE = 'https://help.openai.com/en/articles/10306912-sharing-feedback-evals-and-api-data-with-openai';
 const PRICING_SOURCE = 'https://developers.openai.com/api/docs/models';
 const CATALOG_AS_OF = '2026-08-06';
+const MONITOR_WARNING_PERCENT = 80;
+const MONITOR_AUTO_PAUSE_PERCENT = 90;
 
 const GROUPS = {
   frontier: { label: '고성능 모델 풀', freeLimit: 250_000, publishedLimit: 1_000_000, hardLimit: 237_500 },
@@ -14,7 +17,7 @@ const GROUPS = {
 };
 
 const price = (input, cachedInput, output) => ({ input, cachedInput, output });
-const model = (id, label, group, pricing, options = {}) => ({ id, label, group, pricing, aliases: [], lifecycle: 'legacy', defaultCallEnabled: false, defaultAgentSelectable: false, ...options });
+const model = (id, label, group, pricing, options = {}) => ({ id, label, group, pricing, aliases: [], lifecycle: 'legacy', catalogSource: 'global-help', defaultCallEnabled: false, defaultAgentSelectable: false, ...options });
 
 // Exact request IDs from the official complimentary-token article. Aliases are accepted only
 // as local conveniences and are always rewritten to the exact eligible request ID before use.
@@ -49,6 +52,7 @@ const MODELS = [
   model('gpt-4o-mini-2024-07-18', 'GPT-4o mini', 'efficient', price(0.15, 0.075, 0.6), { aliases: ['gpt-4o-mini'], role: '레거시 소형 멀티모달' }),
   model('o4-mini-2025-04-16', 'o4-mini', 'efficient', price(1.1, 0.275, 4.4), { aliases: ['o4-mini'], role: '레거시 경량 추론' }),
   model('o1-mini-2024-09-12', 'o1-mini', 'efficient', price(1.1, 0.55, 4.4), { aliases: ['o1-mini'], role: '레거시 소형 추론' }),
+  model('o3-mini-2025-01-31', 'o3-mini', 'efficient', price(1.1, 0.55, 4.4), { aliases: ['o3-mini'], role: '소형 추론·과학·코딩', catalogSource: 'account-ui' }),
   model('codex-mini-latest', 'Codex mini', 'efficient', price(1.5, 0.375, 6), { role: '레거시 Codex CLI 특화' })
 ];
 
@@ -82,12 +86,112 @@ export function openaiModelProbePath(options = {}) {
   return options.probeFile || path.join(stateRoot(options.env, options.home), 'openai-usage', 'model-probes.json');
 }
 
+export function openaiCatalogProbePath(options = {}) {
+  return options.catalogProbeFile || path.join(stateRoot(options.env, options.home), 'openai-usage', 'catalog-probe.json');
+}
+
+export function openaiMonitorPath(options = {}) {
+  return options.monitorFile || path.join(stateRoot(options.env, options.home), 'openai-usage', 'monitor.json');
+}
+
+export function openaiCatalogCheckPath(options = {}) {
+  return options.catalogCheckFile || path.join(stateRoot(options.env, options.home), 'openai-usage', 'catalog-check.json');
+}
+
+export function openaiEligibilityPath(options = {}) {
+  return options.eligibilityFile || path.join(stateRoot(options.env, options.home), 'openai-usage', 'eligibility.json');
+}
+
 function atomicJsonWrite(file, value) {
   fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
   const temporary = `${file}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(temporary, file);
   if (process.platform !== 'win32') fs.chmodSync(file, 0o600);
+}
+
+function readPrivateJson(file, fallback, label) {
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch (error) {
+    if (error.code === 'ENOENT') return structuredClone(fallback);
+    throw new Error(`${label}을 읽을 수 없습니다: ${error.message}`);
+  }
+}
+
+function emptyMonitorState() {
+  return {
+    schemaVersion: 1,
+    lastEvaluatedAt: null,
+    state: 'ready',
+    autoPausedAt: null,
+    autoPauseReason: null,
+    officialObservation: null
+  };
+}
+
+function readMonitorState(options = {}) {
+  const value = readPrivateJson(openaiMonitorPath(options), emptyMonitorState(), 'OpenAI monitor 상태');
+  return value.schemaVersion === 1 ? { ...emptyMonitorState(), ...value } : emptyMonitorState();
+}
+
+function writeMonitorState(value, options = {}) {
+  atomicJsonWrite(openaiMonitorPath(options), value);
+}
+
+function emptyCatalogProbe() {
+  return { schemaVersion: 1, latest: null };
+}
+
+function emptyEligibility() {
+  return { schemaVersion: 1, updatedAt: null, source: null, declaredFamilies: [], observedIncentiveModels: [] };
+}
+
+function readEligibility(options = {}) {
+  const value = readPrivateJson(openaiEligibilityPath(options), emptyEligibility(), 'OpenAI 계정 무료 대상 기록');
+  return value.schemaVersion === 1 ? { ...emptyEligibility(), ...value } : emptyEligibility();
+}
+
+function eligibilityCandidates(definition) {
+  return Array.from(new Set([
+    definition.id,
+    ...definition.aliases,
+    definition.id.replace(/-\d{4}-\d{2}-\d{2}$/, '')
+  ].map(value => value.toLowerCase())));
+}
+
+function modelEligibility(definition, eligibility) {
+  const candidates = eligibilityCandidates(definition);
+  const observed = candidates.some(candidate => eligibility.observedIncentiveModels.includes(candidate));
+  const declared = candidates.some(candidate => eligibility.declaredFamilies.includes(candidate));
+  return {
+    status: observed ? 'observed_incentive' : declared ? 'account_declared' : 'not_verified',
+    verified: observed || declared,
+    source: observed ? 'official-usage-processing-tier' : declared ? eligibility.source : null
+  };
+}
+
+function normalizedEligibilityValues(values, label) {
+  if (!Array.isArray(values)) throw new Error(`${label} 목록이 필요합니다.`);
+  return Array.from(new Set(values.map(value => String(value).trim().toLowerCase()).filter(Boolean))).sort();
+}
+
+export function configureOpenaiEligibility(change, options = {}) {
+  const current = readEligibility(options);
+  const next = {
+    ...current,
+    source: String(change.source || current.source || 'authenticated-account-ui').slice(0, 120),
+    declaredFamilies: change.declaredFamilies ? normalizedEligibilityValues(change.declaredFamilies, '계정 표시 모델군') : current.declaredFamilies,
+    observedIncentiveModels: change.observedIncentiveModels ? normalizedEligibilityValues(change.observedIncentiveModels, '실제 무료 귀속 모델') : current.observedIncentiveModels,
+    updatedAt: new Date(options.now || Date.now()).toISOString()
+  };
+  atomicJsonWrite(openaiEligibilityPath(options), next);
+  return next;
+}
+
+function readCatalogProbe(options = {}) {
+  const value = readPrivateJson(openaiCatalogProbePath(options), emptyCatalogProbe(), 'OpenAI catalog 전수 확인 기록');
+  return value.schemaVersion === 1 ? value : emptyCatalogProbe();
 }
 
 function booleanValue(value, label) {
@@ -97,10 +201,10 @@ function booleanValue(value, label) {
   throw new Error(`${label} 값은 true 또는 false여야 합니다.`);
 }
 
-function modelDefinition(input) {
+function modelDefinition(input, options = {}) {
   const definition = MODEL_BY_INPUT.get(String(input || '').trim());
   if (!definition) throw new Error(`공식 무료 대상 모델 목록에 없는 모델입니다: ${input}`);
-  if (definition.lifecycle === 'retired') throw new Error(`공식 무료 목록에는 남아 있지만 현재 종료된 모델입니다: ${definition.id}`);
+  if (definition.lifecycle === 'retired' && !options.allowRetired) throw new Error(`공식 무료 목록에는 남아 있지만 현재 종료된 모델입니다: ${definition.id}`);
   return definition;
 }
 
@@ -265,16 +369,15 @@ export function configureOpenaiProject(projectInput, limits, options = {}) {
 }
 
 function emptyLedger(day = utcDay()) {
-  return { schemaVersion: 2, dayUtc: day, updatedAt: null, models: {} };
+  return { schemaVersion: 3, dayUtc: day, updatedAt: null, pendingTokens: { frontier: 0, efficient: 0 }, models: {} };
 }
 
 function readLedger(options = {}) {
   const file = openaiUsagePath(options);
   try {
     const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (![1, 2].includes(parsed.schemaVersion) || parsed.dayUtc !== utcDay(options.now)) return emptyLedger(utcDay(options.now));
+    if (![1, 2, 3].includes(parsed.schemaVersion) || parsed.dayUtc !== utcDay(options.now)) return emptyLedger(utcDay(options.now));
     if (parsed.schemaVersion === 1) {
-      parsed.schemaVersion = 2;
       for (const usage of Object.values(parsed.models || {})) {
         usage.projects = {
           'legacy-unattributed': {
@@ -284,6 +387,8 @@ function readLedger(options = {}) {
         };
       }
     }
+    parsed.schemaVersion = 3;
+    parsed.pendingTokens = { frontier: 0, efficient: 0, ...(parsed.pendingTokens || {}) };
     return parsed;
   } catch (error) {
     if (error.code === 'ENOENT') return emptyLedger(utcDay(options.now));
@@ -301,8 +406,7 @@ export function complimentaryGroupForModel(model) {
 
 function keyFromKeychain(options = {}) {
   if (options.apiKey) return options.apiKey;
-  if (options.env?.OPENAI_API_KEY || process.env.OPENAI_API_KEY) return options.env?.OPENAI_API_KEY || process.env.OPENAI_API_KEY;
-  if (process.platform !== 'darwin') return null;
+  if ((options.platform || process.platform) !== 'darwin') return null;
   const result = spawnSync('security', ['find-generic-password', '-s', 'OpenAI API', '-a', 'personal-default', '-w'], {
     encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], timeout: 3_000
   });
@@ -320,6 +424,24 @@ function usageTotal(usage = {}) {
   return (usage.inputTokens || 0) + (usage.outputTokens || 0);
 }
 
+function canonicalModelId(modelInput) {
+  return MODEL_BY_INPUT.get(String(modelInput || '').trim())?.id || String(modelInput || '').trim();
+}
+
+function aggregateUsageRows(entries) {
+  const rows = new Map();
+  for (const [storedModel, usage] of entries) {
+    const model = canonicalModelId(storedModel);
+    const row = rows.get(model) || { model, requests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
+    row.requests += usage.requests || 0;
+    row.inputTokens += usage.inputTokens || 0;
+    row.cachedInputTokens += usage.cachedInputTokens || 0;
+    row.outputTokens += usage.outputTokens || 0;
+    rows.set(model, row);
+  }
+  return Array.from(rows.values()).map(row => ({ ...row, totalTokens: usageTotal(row) }));
+}
+
 function projectUsageForGroup(ledger, projectId, groupId) {
   return Object.entries(ledger.models || {})
     .filter(([model]) => complimentaryGroupForModel(model) === groupId)
@@ -333,14 +455,14 @@ function projectSummaries(ledger, options = {}) {
       const summary = projects.get(projectId) || { id: projectId, label: projectUsage.label || projectId, requests: 0, tokens: 0, models: new Map() };
       summary.requests += projectUsage.requests || 0;
       summary.tokens += usageTotal(projectUsage);
-      summary.models.set(model, {
-        model,
-        requests: projectUsage.requests || 0,
-        inputTokens: projectUsage.inputTokens || 0,
-        cachedInputTokens: projectUsage.cachedInputTokens || 0,
-        outputTokens: projectUsage.outputTokens || 0,
-        totalTokens: usageTotal(projectUsage)
-      });
+      const canonical = canonicalModelId(model);
+      const modelUsage = summary.models.get(canonical) || { model: canonical, requests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      modelUsage.requests += projectUsage.requests || 0;
+      modelUsage.inputTokens += projectUsage.inputTokens || 0;
+      modelUsage.cachedInputTokens += projectUsage.cachedInputTokens || 0;
+      modelUsage.outputTokens += projectUsage.outputTokens || 0;
+      modelUsage.totalTokens = usageTotal(modelUsage);
+      summary.models.set(canonical, modelUsage);
       projects.set(projectId, summary);
     }
   }
@@ -406,6 +528,7 @@ export function openaiProviderStatus(options = {}) {
   const ledger = readLedger(options);
   const policy = readProviderPolicy(options);
   const probes = readModelProbes(options);
+  const eligibility = readEligibility(options);
   const groupUsed = Object.fromEntries(Object.keys(GROUPS).map(groupId => [groupId,
     Object.entries(ledger.models || {})
       .filter(([storedModel]) => complimentaryGroupForModel(storedModel) === groupId)
@@ -413,9 +536,11 @@ export function openaiProviderStatus(options = {}) {
   ]));
   const models = MODELS.map(definition => {
     const usage = usageForDefinition(ledger, definition);
-    const effective = definition.lifecycle === 'retired'
+    const accountEligibility = modelEligibility(definition, eligibility);
+    const configured = definition.lifecycle === 'retired'
       ? { callEnabled: false, agentSelectable: false }
       : effectiveModelPolicy(definition, policy);
+    const effective = accountEligibility.verified ? configured : { callEnabled: false, agentSelectable: false };
     const probe = probes.models[definition.id] || null;
     const pool = GROUPS[definition.group];
     return {
@@ -425,8 +550,10 @@ export function openaiProviderStatus(options = {}) {
       groupId: definition.group,
       groupLabel: pool.label,
       lifecycle: definition.lifecycle,
+      catalogSource: definition.catalogSource,
       role: definition.role,
       pricing: definition.pricing,
+      eligibility: accountEligibility,
       callEnabled: effective.callEnabled,
       agentSelectable: effective.agentSelectable,
       isDefault: policy.defaultModel === definition.id,
@@ -448,42 +575,163 @@ export function openaiProviderStatus(options = {}) {
     defaultModel: policy.defaultModel,
     updatedAt: policy.updatedAt,
     keyConfigured: Boolean(keyFromKeychain(options)),
+    eligibility: {
+      source: eligibility.source,
+      updatedAt: eligibility.updatedAt,
+      declaredFamilies: eligibility.declaredFamilies,
+      observedIncentiveModels: eligibility.observedIncentiveModels,
+      verifiedModelCount: models.filter(model => model.eligibility.verified).length
+    },
     catalog: {
       asOf: CATALOG_AS_OF,
       complimentarySource: COMPLIMENTARY_SOURCE,
       pricingSource: PRICING_SOURCE,
       discovery: '공식 무료 목록을 정본으로 사용하고 실제 계정 접근은 모델별 최소 호출로 확인합니다.',
-      modelListScopeRequired: false
+      modelListScopeRequired: false,
+      check: readPrivateJson(openaiCatalogCheckPath(options), { status: 'not_checked', checkedAt: null }, 'OpenAI catalog 갱신 상태')
     },
+    probeBatch: readCatalogProbe(options).latest,
     models
   };
+}
+
+function monitorGroups(ledger) {
+  return Object.entries(GROUPS).map(([id, definition]) => {
+    const tokens = Object.entries(ledger.models || {})
+      .filter(([storedModel]) => complimentaryGroupForModel(storedModel) === id)
+      .reduce((sum, [, usage]) => sum + usageTotal(usage), 0);
+    const pendingTokens = Number(ledger.pendingTokens?.[id] || 0);
+    const protectedTokens = tokens + pendingTokens;
+    const percent = definition.freeLimit ? Number((protectedTokens / definition.freeLimit * 100).toFixed(4)) : 0;
+    return {
+      id,
+      label: definition.label,
+      tokens,
+      pendingTokens,
+      protectedTokens,
+      freeLimit: definition.freeLimit,
+      warningPercent: MONITOR_WARNING_PERCENT,
+      autoPausePercent: MONITOR_AUTO_PAUSE_PERCENT,
+      hardStopPercent: 95,
+      percent,
+      warning: percent >= MONITOR_WARNING_PERCENT,
+      autoPauseRequired: percent >= MONITOR_AUTO_PAUSE_PERCENT
+    };
+  });
+}
+
+export function openaiMonitorStatus(options = {}) {
+  const ledger = readLedger(options);
+  const state = readMonitorState(options);
+  const groups = monitorGroups(ledger);
+  const batch = readCatalogProbe(options).latest;
+  return {
+    ok: true,
+    source: 'aicc-local-monitor',
+    intervalSeconds: 60,
+    warningPercent: MONITOR_WARNING_PERCENT,
+    autoPausePercent: MONITOR_AUTO_PAUSE_PERCENT,
+    hardStopPercent: 95,
+    state: state.state,
+    lastEvaluatedAt: state.lastEvaluatedAt,
+    autoPausedAt: state.autoPausedAt,
+    autoPauseReason: state.autoPauseReason,
+    officialObservation: state.officialObservation,
+    officialSync: {
+      mode: 'authenticated-dashboard-observation',
+      adminKeyConfigured: false,
+      note: '조직 Usage API 자동 동기화는 별도 Admin key가 있을 때만 가능하며 현재 키를 확대하지 않습니다.'
+    },
+    agentGuard: openaiAgentGuardStatus(options),
+    latestProbeBatch: batch ? {
+      id: batch.id,
+      startedAt: batch.startedAt,
+      completedAt: batch.completedAt,
+      status: batch.status,
+      attempted: batch.attempted,
+      total: batch.total,
+      available: batch.available,
+      unavailable: batch.unavailable,
+      totalTokens: batch.totalTokens
+    } : null,
+    groups
+  };
+}
+
+export function evaluateOpenaiMonitor(options = {}) {
+  const ledger = readLedger(options);
+  const groups = monitorGroups(ledger);
+  const state = readMonitorState(options);
+  const now = new Date(options.now || Date.now()).toISOString();
+  const exceeded = groups.find(group => group.autoPauseRequired);
+  const provider = readProviderPolicy(options);
+  state.lastEvaluatedAt = now;
+  if (exceeded) {
+    state.state = 'paused';
+    state.autoPausedAt ||= now;
+    state.autoPauseReason = `${exceeded.label} ${exceeded.percent}%가 선제 정지선 ${MONITOR_AUTO_PAUSE_PERCENT}%에 도달했습니다.`;
+    if (provider.enabled) {
+      provider.enabled = false;
+      provider.lastChangedBy = 'monitor';
+      provider.lastChangeReason = state.autoPauseReason;
+      writeProviderPolicy(provider, options);
+    }
+  } else if (groups.some(group => group.warning)) {
+    state.state = 'warning';
+  } else {
+    state.state = 'ready';
+  }
+  writeMonitorState(state, options);
+  return openaiMonitorStatus(options);
+}
+
+export function recordOpenaiOfficialObservation(observation, options = {}) {
+  const fields = ['inputTokens', 'outputTokens', 'requests'];
+  for (const field of fields) {
+    if (!Number.isInteger(Number(observation[field])) || Number(observation[field]) < 0) throw new Error(`${field}는 0 이상의 정수여야 합니다.`);
+  }
+  const state = readMonitorState(options);
+  const observedAt = new Date(observation.observedAt || options.now || Date.now()).toISOString();
+  const batch = readCatalogProbe(options).latest;
+  const completedMs = batch?.completedAt ? new Date(batch.completedAt).getTime() : null;
+  state.officialObservation = {
+    source: 'authenticated-openai-usage-ui',
+    observedAt,
+    inputTokens: Number(observation.inputTokens),
+    outputTokens: Number(observation.outputTokens),
+    totalTokens: Number(observation.inputTokens) + Number(observation.outputTokens),
+    requests: Number(observation.requests),
+    costUsd: Number(observation.costUsd || 0),
+    processingTier: observation.processingTier || 'data sharing incentive tier',
+    probeBatchId: batch?.id || null,
+    reflectionDelaySeconds: completedMs == null ? null : Math.max(0, Math.round((new Date(observedAt).getTime() - completedMs) / 1000))
+  };
+  writeMonitorState(state, options);
+  return openaiMonitorStatus(options);
 }
 
 export function openaiUsageStatus(options = {}) {
   const ledger = readLedger(options);
   const groups = Object.entries(GROUPS).map(([id, definition]) => {
-    const rows = Object.entries(ledger.models)
-      .filter(([model]) => complimentaryGroupForModel(model) === id)
-      .map(([model, usage]) => ({
-        model: MODEL_BY_INPUT.get(model)?.id || model,
-        label: MODEL_BY_INPUT.get(model)?.label || model,
-        requests: usage.requests || 0,
-        inputTokens: usage.inputTokens || 0,
-        cachedInputTokens: usage.cachedInputTokens || 0,
-        outputTokens: usage.outputTokens || 0,
-        totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
-        estimatedStandardCostUsd: modelCost(model, usage)
+    const rows = aggregateUsageRows(Object.entries(ledger.models)
+      .filter(([model]) => complimentaryGroupForModel(model) === id))
+      .map(row => ({
+        ...row,
+        label: MODEL_BY_INPUT.get(row.model)?.label || row.model,
+        estimatedStandardCostUsd: modelCost(row.model, row)
       }))
       .sort((left, right) => right.totalTokens - left.totalTokens);
     const tokens = rows.reduce((sum, row) => sum + row.totalTokens, 0);
+    const pendingTokens = Number(ledger.pendingTokens?.[id] || 0);
     return {
       id,
       label: definition.label,
       freeLimit: definition.freeLimit,
       hardLimit: definition.hardLimit,
       tokens,
-      percent: definition.freeLimit ? Number((tokens / definition.freeLimit * 100).toFixed(2)) : 0,
-      hardRemaining: Math.max(0, definition.hardLimit - tokens),
+      pendingTokens,
+      percent: definition.freeLimit ? Number(((tokens + pendingTokens) / definition.freeLimit * 100).toFixed(2)) : 0,
+      hardRemaining: Math.max(0, definition.hardLimit - tokens - pendingTokens),
       models: rows
     };
   });
@@ -498,6 +746,7 @@ export function openaiUsageStatus(options = {}) {
     pricing: { asOf: CATALOG_AS_OF, currency: 'USD', source: PRICING_SOURCE },
     groups,
     provider: openaiProviderStatus(options),
+    monitor: openaiMonitorStatus(options),
     projects: projectSummaries(ledger, options),
     note: '즉시 집계는 AICC guard를 통과한 요청만 포함합니다. OpenAI 조직 Usage API는 Admin API key가 있어야 하며 지연될 수 있습니다.'
   };
@@ -543,6 +792,8 @@ async function withLedgerLock(callback, options = {}) {
 function reserveCheck(definition, input, maxOutputTokens, project, selectionSource, options = {}) {
   const providerPolicy = readProviderPolicy(options);
   if (!providerPolicy.enabled) throw new Error('AICC OpenAI API provider가 꺼져 있습니다.');
+  const eligibility = modelEligibility(definition, readEligibility(options));
+  if (!eligibility.verified) throw new Error(`현재 계정의 무료 대상 또는 실제 incentive 귀속으로 확인되지 않은 모델입니다: ${definition.id}`);
   const effective = effectiveModelPolicy(definition, providerPolicy);
   if (!options.probe && !effective.callEnabled) throw new Error(`AICC에서 API 호출이 꺼진 모델입니다: ${definition.id}`);
   if (!options.probe && selectionSource === 'agent' && !effective.agentSelectable) throw new Error(`에이전트가 선택할 수 없도록 설정된 모델입니다: ${definition.id}`);
@@ -552,10 +803,11 @@ function reserveCheck(definition, input, maxOutputTokens, project, selectionSour
   const used = Object.entries(ledger.models)
     .filter(([candidate]) => complimentaryGroupForModel(candidate) === groupId)
     .reduce((sum, [, usage]) => sum + (usage.inputTokens || 0) + (usage.outputTokens || 0), 0);
+  const pending = Number(ledger.pendingTokens?.[groupId] || 0);
   const conservativeInputUpperBound = Buffer.byteLength(JSON.stringify(input), 'utf8');
   const reservation = conservativeInputUpperBound + maxOutputTokens;
-  if (used + reservation > group.hardLimit) {
-    throw new Error(`${group.label}의 로컬 95% 하드 한도에 도달할 수 있어 요청을 차단했습니다. 현재 ${used.toLocaleString()} token, 예약 ${reservation.toLocaleString()} token.`);
+  if (used + pending + reservation > group.hardLimit) {
+    throw new Error(`${group.label}의 로컬 95% 하드 한도에 도달할 수 있어 요청을 차단했습니다. 현재 ${used.toLocaleString()} token, 진행 예약 ${pending.toLocaleString()} token, 새 예약 ${reservation.toLocaleString()} token.`);
   }
   const policy = projectPolicy(project, options);
   const projectUsed = projectUsageForGroup(ledger, project.id, groupId);
@@ -566,7 +818,7 @@ function reserveCheck(definition, input, maxOutputTokens, project, selectionSour
   return {
     groupId,
     reservation,
-    global: { used, limit: group.hardLimit, remainingAfterReservation: group.hardLimit - used - reservation },
+    global: { used, pending, limit: group.hardLimit, remainingAfterReservation: group.hardLimit - used - pending - reservation },
     project: { ...project, used: projectUsed, limit: projectLimit, remainingAfterReservation: projectLimit - projectUsed - reservation, customized: policy.customized }
   };
 }
@@ -591,7 +843,7 @@ export function estimateOpenaiRequest(request, options = {}) {
 export async function guardedOpenaiResponse(request, options = {}) {
   const policy = readProviderPolicy(options);
   const requestedModel = String(request.model || policy.defaultModel).trim();
-  const definition = modelDefinition(requestedModel);
+  const definition = modelDefinition(requestedModel, { allowRetired: Boolean(options.probe && options.allowRetiredProbe) });
   const effectiveModel = definition.id;
   const maxOutputTokens = Number(request.maxOutputTokens || 512);
   if (!Number.isInteger(maxOutputTokens) || maxOutputTokens < 1 || maxOutputTokens > 16_384) throw new Error('maxOutputTokens는 1~16384 정수여야 합니다.');
@@ -603,20 +855,39 @@ export async function guardedOpenaiResponse(request, options = {}) {
   const selectionSource = request.selectionSource === 'user' ? 'user' : 'agent';
 
   return withLedgerLock(async () => {
-    reserveCheck(definition, input, maxOutputTokens, project, selectionSource, options);
-    const fetchImpl = options.fetchImpl || fetch;
-    const apiResponse = await fetchImpl('https://api.openai.com/v1/responses', {
-      method: 'POST',
-      headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
-      body: JSON.stringify({ model: effectiveModel, input, max_output_tokens: maxOutputTokens, store: false })
-    });
-    const payload = await apiResponse.json();
-    if (!apiResponse.ok) throw new Error(payload.error?.message || payload.error || `OpenAI API HTTP ${apiResponse.status}`);
+    const reservationState = reserveCheck(definition, input, maxOutputTokens, project, selectionSource, options);
+    const reservedLedger = readLedger(options);
+    reservedLedger.pendingTokens[definition.group] = Number(reservedLedger.pendingTokens[definition.group] || 0) + reservationState.reservation;
+    reservedLedger.updatedAt = new Date(options.now || Date.now()).toISOString();
+    writeLedger(reservedLedger, options);
+    let payload;
+    try {
+      const fetchImpl = options.fetchImpl || fetch;
+      const apiResponse = await fetchImpl('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${apiKey}`, 'content-type': 'application/json' },
+        body: JSON.stringify({ model: effectiveModel, input, max_output_tokens: maxOutputTokens, store: false })
+      });
+      payload = await apiResponse.json();
+      if (!apiResponse.ok) {
+        const error = new Error(payload.error?.message || payload.error || `OpenAI API HTTP ${apiResponse.status}`);
+        error.status = apiResponse.status;
+        error.code = payload.error?.code || payload.error?.type || `http_${apiResponse.status}`;
+        throw error;
+      }
+    } catch (error) {
+      const failedLedger = readLedger(options);
+      failedLedger.pendingTokens[definition.group] = Math.max(0, Number(failedLedger.pendingTokens[definition.group] || 0) - reservationState.reservation);
+      failedLedger.updatedAt = new Date(options.now || Date.now()).toISOString();
+      writeLedger(failedLedger, options);
+      throw error;
+    }
     const usage = payload.usage || {};
     const inputTokens = Number(usage.input_tokens || 0);
     const outputTokens = Number(usage.output_tokens || 0);
     const cachedInputTokens = Number(usage.input_tokens_details?.cached_tokens || 0);
     const ledger = readLedger(options);
+    ledger.pendingTokens[definition.group] = Math.max(0, Number(ledger.pendingTokens[definition.group] || 0) - reservationState.reservation);
     const row = ledger.models[effectiveModel] || { requests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, projects: {} };
     row.requests += 1;
     row.inputTokens += inputTokens;
@@ -633,12 +904,15 @@ export async function guardedOpenaiResponse(request, options = {}) {
     ledger.models[effectiveModel] = row;
     ledger.updatedAt = new Date(options.now || Date.now()).toISOString();
     writeLedger(ledger, options);
+    evaluateOpenaiMonitor(options);
     return { ok: true, id: payload.id, requestedModel, model: payload.model || effectiveModel, effectiveModel, selectionSource, serviceTier: payload.service_tier || null, project, text: responseText(payload), usage: { inputTokens, cachedInputTokens, outputTokens, totalTokens: inputTokens + outputTokens }, guard: openaiUsageStatus(options) };
   }, options);
 }
 
 export async function probeOpenaiModel(modelInput, options = {}) {
-  const definition = modelDefinition(modelInput);
+  const definition = modelDefinition(modelInput, { allowRetired: Boolean(options.allowRetiredProbe) });
+  const requestedModel = String(modelInput).trim();
+  const startedAt = Date.now();
   try {
     const result = await guardedOpenaiResponse({
       model: definition.id,
@@ -646,14 +920,77 @@ export async function probeOpenaiModel(modelInput, options = {}) {
       maxOutputTokens: 16,
       project: { id: 'aicc-model-probe', label: 'AICC 모델 확인' },
       selectionSource: 'user'
-    }, { ...options, probe: true });
-    recordModelProbe(definition.id, { status: 'available', responseModel: result.model, serviceTier: result.serviceTier }, options);
-    return { ok: true, model: definition.id, status: 'available', usage: result.usage, responseModel: result.model, serviceTier: result.serviceTier };
+    }, { ...options, probe: true, allowRetiredProbe: Boolean(options.allowRetiredProbe) });
+    const durationMs = Date.now() - startedAt;
+    const probe = { status: 'available', responseModel: result.model, serviceTier: result.serviceTier, durationMs, usage: result.usage, batchId: options.batchId || null };
+    recordModelProbe(definition.id, probe, options);
+    return { ok: true, requestedModel, model: definition.id, lifecycle: definition.lifecycle, ...probe };
   } catch (error) {
     const message = String(error.message || error).replace(/sk-[A-Za-z0-9_-]+/g, '<redacted>').slice(0, 500);
-    recordModelProbe(definition.id, { status: 'unavailable', reason: message }, options);
-    return { ok: false, model: definition.id, status: 'unavailable', reason: message };
+    const status = Number(error.status) === 404 || /does not exist|not found|decommissioned|deprecated/i.test(message)
+      ? 'not_found'
+      : Number(error.status) === 403 || /permission|access/i.test(message)
+        ? 'access_denied'
+        : Number(error.status) === 429
+          ? 'rate_limited'
+          : 'unavailable';
+    const probe = { status, reason: message, errorCode: error.code || null, httpStatus: Number(error.status) || null, durationMs: Date.now() - startedAt, usage: null, batchId: options.batchId || null };
+    recordModelProbe(definition.id, probe, options);
+    return { ok: false, requestedModel, model: definition.id, lifecycle: definition.lifecycle, ...probe };
   }
 }
 
-export const openaiComplimentaryConfig = { groups: GROUPS, models: MODELS, defaultModel: DEFAULT_MODEL, defaultProjectLimitPercent: DEFAULT_PROJECT_LIMIT_PERCENT, catalogAsOf: CATALOG_AS_OF };
+export async function probeAllOpenaiModels(options = {}) {
+  const eligibility = readEligibility(options);
+  const requestedModels = Array.from(new Set([...eligibility.declaredFamilies, ...eligibility.observedIncentiveModels]));
+  if (!requestedModels.length) throw new Error('먼저 현재 계정의 Data Controls 무료 대상 모델군을 기록해야 합니다.');
+  const targets = requestedModels.map(requestedModel => ({ requestedModel, definition: modelDefinition(requestedModel) }));
+  const startedAt = new Date(options.now || Date.now()).toISOString();
+  const batchId = crypto.randomUUID();
+  const container = {
+    schemaVersion: 1,
+    latest: {
+      id: batchId,
+      status: 'running',
+      startedAt,
+      completedAt: null,
+      total: targets.length,
+      attempted: 0,
+      available: 0,
+      unavailable: 0,
+      totalTokens: 0,
+      results: []
+    }
+  };
+  atomicJsonWrite(openaiCatalogProbePath(options), container);
+  for (const target of targets) {
+    const result = await probeOpenaiModel(target.requestedModel, { ...options, batchId });
+    container.latest.results.push(result);
+    container.latest.attempted += 1;
+    if (result.ok) {
+      container.latest.available += 1;
+      container.latest.totalTokens += result.usage?.totalTokens || 0;
+    } else {
+      container.latest.unavailable += 1;
+    }
+    atomicJsonWrite(openaiCatalogProbePath(options), container);
+    if (options.onResult) await options.onResult(result, { ...container.latest, results: undefined });
+    if (options.pacingMs !== 0 && container.latest.attempted < targets.length) {
+      await new Promise(resolve => setTimeout(resolve, options.pacingMs || 250));
+    }
+  }
+  container.latest.status = 'completed';
+  container.latest.completedAt = new Date().toISOString();
+  atomicJsonWrite(openaiCatalogProbePath(options), container);
+  return container.latest;
+}
+
+export const openaiComplimentaryConfig = {
+  groups: GROUPS,
+  models: MODELS,
+  defaultModel: DEFAULT_MODEL,
+  defaultProjectLimitPercent: DEFAULT_PROJECT_LIMIT_PERCENT,
+  catalogAsOf: CATALOG_AS_OF,
+  sources: { complimentary: COMPLIMENTARY_SOURCE, pricing: PRICING_SOURCE },
+  monitor: { warningPercent: MONITOR_WARNING_PERCENT, autoPausePercent: MONITOR_AUTO_PAUSE_PERCENT, hardStopPercent: 95 }
+};

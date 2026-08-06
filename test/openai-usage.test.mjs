@@ -3,29 +3,50 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+import { checkOpenaiCatalog } from '../src/openai-catalog-check.mjs';
 import {
   complimentaryGroupForModel,
   configureOpenaiProvider,
   configureOpenaiProject,
   estimateOpenaiRequest,
+  evaluateOpenaiMonitor,
   guardedOpenaiResponse,
+  openaiCatalogProbePath,
+  openaiMonitorPath,
   openaiProjectPolicyPath,
   openaiProjectStatus,
   openaiProviderPolicyPath,
   openaiProviderStatus,
   openaiUsagePath,
   openaiUsageStatus,
+  probeAllOpenaiModels,
   resolveOpenaiProject
 } from '../src/openai-usage.mjs';
 
 function temporaryState(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-openai-usage-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const eligibilityFile = path.join(root, 'eligibility.json');
+  fs.writeFileSync(eligibilityFile, JSON.stringify({
+    schemaVersion: 1,
+    source: 'test-fixture',
+    declaredFamilies: [
+      'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.4-nano',
+      'gpt-4.1', 'gpt-4o', 'o1', 'o3', 'o3-mini', 'o4-mini'
+    ],
+    observedIncentiveModels: [],
+    updatedAt: '2026-08-06T00:00:00Z'
+  }), { mode: 0o600 });
   return {
+    home: root,
     file: path.join(root, 'usage.json'),
     policyFile: path.join(root, 'projects.json'),
     providerFile: path.join(root, 'provider.json'),
     probeFile: path.join(root, 'model-probes.json'),
+    catalogProbeFile: path.join(root, 'catalog-probe.json'),
+    monitorFile: path.join(root, 'monitor.json'),
+    catalogCheckFile: path.join(root, 'catalog-check.json'),
+    eligibilityFile,
     project: { id: 'project-test', label: 'Test Project' },
     apiKey: 'test-only-key',
     now: new Date('2026-08-06T12:00:00Z')
@@ -75,6 +96,24 @@ test('guard records exact API usage per model without persisting prompts or keys
   const persisted = fs.readFileSync(openaiUsagePath(options), 'utf8');
   assert.doesNotMatch(persisted, /짧은 테스트|test-only-key|테스트 응답/);
   if (process.platform !== 'win32') assert.equal(fs.statSync(openaiUsagePath(options)).mode & 0o077, 0);
+});
+
+test('usage display merges historical aliases into one canonical model row', t => {
+  const options = temporaryState(t);
+  fs.writeFileSync(options.file, JSON.stringify({
+    schemaVersion: 3,
+    dayUtc: '2026-08-06',
+    updatedAt: '2026-08-06T11:00:00Z',
+    pendingTokens: { frontier: 0, efficient: 0 },
+    models: {
+      'gpt-5.4-mini': { requests: 1, inputTokens: 10, cachedInputTokens: 0, outputTokens: 2, projects: {} },
+      'gpt-5.4-mini-2026-03-17': { requests: 2, inputTokens: 20, cachedInputTokens: 0, outputTokens: 4, projects: {} }
+    }
+  }), { mode: 0o600 });
+  const rows = openaiUsageStatus(options).groups.find(group => group.id === 'efficient').models;
+  assert.deepEqual(rows.map(row => row.model), ['gpt-5.4-mini-2026-03-17']);
+  assert.equal(rows[0].requests, 3);
+  assert.equal(rows[0].totalTokens, 36);
 });
 
 test('project identity uses an opaque stable id and never exposes the supplied alias as a path', () => {
@@ -183,4 +222,63 @@ test('guard recovers an abandoned lock without weakening active-request exclusio
   const result = await guardedOpenaiResponse({ model: 'gpt-5.4-mini', input: 'ok', maxOutputTokens: 1 }, options);
   assert.equal(result.ok, true);
   assert.equal(fs.existsSync(lock), false);
+});
+
+test('monitor warns at 80 percent and disables the provider at 90 percent', t => {
+  const options = temporaryState(t);
+  fs.mkdirSync(path.dirname(options.file), { recursive: true });
+  fs.writeFileSync(options.file, JSON.stringify({
+    schemaVersion: 2,
+    dayUtc: '2026-08-06',
+    updatedAt: '2026-08-06T11:00:00Z',
+    models: { 'gpt-5.6-sol': { requests: 1, inputTokens: 225_000, cachedInputTokens: 0, outputTokens: 0, projects: {} } }
+  }), { mode: 0o600 });
+  const result = evaluateOpenaiMonitor(options);
+  assert.equal(result.state, 'paused');
+  assert.equal(result.groups.find(group => group.id === 'frontier').percent, 90);
+  assert.equal(openaiProviderStatus(options).enabled, false);
+  assert.ok(fs.existsSync(openaiMonitorPath(options)));
+});
+
+test('catalog probe attempts every account-verified model family and records comparable usage', async t => {
+  const options = temporaryState(t);
+  options.pacingMs = 0;
+  options.fetchImpl = async (_url, request) => {
+    const payload = JSON.parse(request.body);
+    return new Response(JSON.stringify({
+      id: `resp_${payload.model}`,
+      model: payload.model,
+      output: [{ type: 'message', content: [{ type: 'output_text', text: 'OK' }] }],
+      usage: { input_tokens: 1, output_tokens: 1 }
+    }), { status: 200, headers: { 'content-type': 'application/json' } });
+  };
+  const result = await probeAllOpenaiModels(options);
+  assert.equal(result.total, 12);
+  assert.equal(result.attempted, 12);
+  assert.equal(result.available, 12);
+  assert.equal(result.totalTokens, 24);
+  assert.equal(JSON.parse(fs.readFileSync(openaiCatalogProbePath(options), 'utf8')).latest.status, 'completed');
+});
+
+test('OPENAI_API_KEY environment values are not accepted as an AICC credential source', t => {
+  const options = temporaryState(t);
+  delete options.apiKey;
+  options.platform = 'linux';
+  options.env = { OPENAI_API_KEY: 'must-not-be-used' };
+  assert.equal(openaiProviderStatus(options).keyConfigured, false);
+});
+
+test('catalog checker detects exact complimentary additions without editing source', async t => {
+  const options = temporaryState(t);
+  const known = openaiProviderStatus(options).models.map(model => model.id);
+  options.fetchImpl = async url => new Response(
+    String(url).endsWith('.json')
+      ? `${known.join(' ')} gpt-5.7-luna`
+      : known.map(model => `- [${model}](/api/docs/models/${model.replace(/-\d{4}-\d{2}-\d{2}$/, '')}.md)`).join('\n'),
+    { status: 200 }
+  );
+  const result = await checkOpenaiCatalog(options);
+  assert.equal(result.status, 'drift_detected');
+  assert.deepEqual(result.added, ['gpt-5.7-luna']);
+  assert.deepEqual(result.removed, []);
 });

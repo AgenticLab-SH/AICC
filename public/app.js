@@ -50,6 +50,11 @@ const ocxModules = $('#ocxModules');
 const supportMessage = $('#supportMessage');
 const copySupportPrompt = $('#copySupportPrompt');
 const copySupportJson = $('#copySupportJson');
+const openaiMonitorState = $('#openaiMonitorState');
+const openaiMonitorSummary = $('#openaiMonitorSummary');
+const probeAllOpenaiModels = $('#probeAllOpenaiModels');
+const checkOpenaiCatalog = $('#checkOpenaiCatalog');
+const applyOpenaiAgentGuard = $('#applyOpenaiAgentGuard');
 let confirmationToken = null;
 let catalog = { groups: [], items: [] };
 let statusData = null;
@@ -476,9 +481,31 @@ function formatTokens(value) {
 
 function availabilityLabel(availability) {
   if (availability?.status === 'available') return '실호출 확인';
-  if (availability?.status === 'unavailable') return '호출 불가';
+  if (['unavailable', 'not_found', 'access_denied', 'rate_limited'].includes(availability?.status)) return '호출 불가';
   if (availability?.status === 'retired') return '종료';
   return '미확인';
+}
+
+function renderOpenaiMonitor(monitor, provider) {
+  if (!monitor) return;
+  const label = monitor.state === 'paused' ? '자동 정지' : monitor.state === 'warning' ? '경고' : '정상 감시';
+  openaiMonitorState.textContent = label;
+  openaiMonitorState.classList.toggle('ready', monitor.state === 'ready');
+  openaiMonitorState.classList.toggle('attention', monitor.state !== 'ready');
+  const batch = provider?.probeBatch;
+  const check = provider?.catalog?.check;
+  const official = monitor.officialObservation;
+  const agentGuard = monitor.agentGuard;
+  const poolRows = monitor.groups.map(group => `<span><b>${escapeHtml(group.label)}</b><small>${group.percent}% · 경고 ${group.warningPercent}% · 자동 정지 ${group.autoPausePercent}%</small></span>`).join('');
+  openaiMonitorSummary.innerHTML = `${poolRows}
+    <span><b>전수 확인</b><small>${batch ? `${batch.attempted}/${batch.total} · 성공 ${batch.available} · 실패 ${batch.unavailable} · ${formatTokens(batch.totalTokens)} token` : '아직 실행하지 않음'}</small></span>
+    <span><b>공식 catalog</b><small>${check?.checkedAt ? `${escapeHtml(check.status)} · ${new Date(check.checkedAt).toLocaleString('ko-KR')}` : '아직 확인하지 않음'}${check?.added?.length || check?.removed?.length ? ` · 추가 ${check.added.length} / 제거 ${check.removed.length}` : ''}</small></span>
+    <span><b>공식 Usage 반영</b><small>${official ? `${formatTokens(official.totalTokens)} token · ${official.requests}회 · 지연 ${official.reflectionDelaySeconds ?? '측정 불가'}초 · $${Number(official.costUsd).toFixed(2)}` : '전수 확인 후 인증 화면에서 측정'}</small></span>`;
+  openaiMonitorSummary.innerHTML += `<span><b>Agent 우회 방지</b><small>${agentGuard?.ok ? `${agentGuard.guardedCount}/${agentGuard.scopeCount} Codex home 적용` : `${agentGuard?.guardedCount || 0}/${agentGuard?.scopeCount || 0} 적용 · 조치 필요`}</small></span>`;
+  probeAllOpenaiModels.disabled = !provider?.enabled || batch?.status === 'running';
+  probeAllOpenaiModels.textContent = batch?.status === 'running' ? `전수 확인 중 ${batch.attempted}/${batch.total}` : '계정 무료 모델 전수 실호출';
+  applyOpenaiAgentGuard.disabled = Boolean(agentGuard?.ok);
+  applyOpenaiAgentGuard.textContent = agentGuard?.ok ? 'Agent 우회 방지 적용됨' : 'Agent 우회 방지 적용';
 }
 
 function formatPrice(value) {
@@ -498,7 +525,7 @@ function renderOpenaiProvider(provider) {
   openaiDefaultModel.innerHTML = selectable.map(model => `<option value="${escapeHtml(model.id)}"${model.isDefault ? ' selected' : ''}>${escapeHtml(model.label)} · ${escapeHtml(model.id)}</option>`).join('');
   setOpenaiDefaultModel.disabled = !selectable.length || openaiDefaultModel.value === provider.defaultModel;
   const available = provider.models.filter(model => model.availability?.status === 'available').length;
-  openaiModelSummary.textContent = `${provider.models.length}개 공식 대상 · ${selectable.length}개 agent 허용 · ${available}개 실호출 확인`;
+  openaiModelSummary.textContent = `${provider.models.length}개 공식 후보 · 계정 표시 ${provider.eligibility?.declaredFamilies?.length || 0}개 모델군 · ${selectable.length}개 agent 허용 · ${available}개 실호출 확인`;
   const filters = [
     ['current', '현재 권장'], ['enabled', '사용 허용'], ['all', '전체'], ['frontier', '고성능 풀'], ['efficient', '경량 풀']
   ];
@@ -511,19 +538,21 @@ function renderOpenaiProvider(provider) {
   });
   openaiModelList.innerHTML = visible.map(model => {
     const price = model.pricing;
-    const unavailable = model.lifecycle === 'retired';
-    const accessClass = model.availability?.status === 'available' ? 'ready' : model.availability?.status === 'unavailable' ? 'attention' : '';
+    const failedAvailability = ['unavailable', 'not_found', 'access_denied', 'rate_limited'].includes(model.availability?.status);
+    const cannotEnable = model.lifecycle === 'retired' || !model.eligibility?.verified || failedAvailability;
+    const cannotProbe = model.lifecycle === 'retired' || !model.eligibility?.verified || !enabled;
+    const accessClass = model.availability?.status === 'available' ? 'ready' : failedAvailability ? 'attention' : '';
     return `<article class="openai-model-row${model.isDefault ? ' is-default' : ''}">
       <div class="openai-model-copy">
-        <div class="openai-model-title"><strong>${escapeHtml(model.label)}</strong><code>${escapeHtml(model.id)}</code>${model.isDefault ? '<span class="model-policy-badge default">기본</span>' : ''}<span class="model-policy-badge">${escapeHtml(model.groupId)}</span><span class="model-policy-badge ${accessClass}">${availabilityLabel(model.availability)}</span></div>
+        <div class="openai-model-title"><strong>${escapeHtml(model.label)}</strong><code>${escapeHtml(model.id)}</code>${model.isDefault ? '<span class="model-policy-badge default">기본</span>' : ''}<span class="model-policy-badge">${escapeHtml(model.groupId)}</span><span class="model-policy-badge ${model.eligibility?.verified ? 'ready' : 'attention'}">${model.eligibility?.status === 'observed_incentive' ? '무료 실측' : model.eligibility?.status === 'account_declared' ? '계정 표시' : '무료 미확인'}</span><span class="model-policy-badge ${accessClass}">${availabilityLabel(model.availability)}</span></div>
         <p>${escapeHtml(model.role)} · input ${formatPrice(price?.input)} / cached ${formatPrice(price?.cachedInput)} / output ${formatPrice(price?.output)} per 1M</p>
         <small>오늘 입력 ${formatTokens(model.usage.inputTokens)} · 출력 ${formatTokens(model.usage.outputTokens)} · 공유 풀 ${model.usage.sharedPoolPercent}% · 표준요금 환산 ${model.usage.estimatedStandardCostUsd == null ? '–' : `$${model.usage.estimatedStandardCostUsd.toFixed(5)}`}</small>
       </div>
       <div class="openai-model-actions">
-        <button type="button" class="secondary" data-openai-model-action="call" data-model="${escapeHtml(model.id)}" data-call-enabled="${!model.callEnabled}" data-agent-selectable="${model.agentSelectable}" ${unavailable ? 'disabled' : ''}>API ${model.callEnabled ? '끄기' : '켜기'}</button>
-        <button type="button" class="secondary" data-openai-model-action="agent" data-model="${escapeHtml(model.id)}" data-call-enabled="${model.callEnabled}" data-agent-selectable="${!model.agentSelectable}" ${unavailable || !model.callEnabled ? 'disabled' : ''}>Agent ${model.agentSelectable ? '제외' : '허용'}</button>
-        <button type="button" class="secondary" data-openai-model-action="default" data-model="${escapeHtml(model.id)}" ${unavailable || !model.agentSelectable || model.isDefault ? 'disabled' : ''}>기본 지정</button>
-        <button type="button" class="ghost" data-openai-model-action="probe" data-model="${escapeHtml(model.id)}" ${unavailable || !enabled ? 'disabled' : ''}>연결 확인</button>
+        <button type="button" class="secondary" data-openai-model-action="call" data-model="${escapeHtml(model.id)}" data-call-enabled="${!model.callEnabled}" data-agent-selectable="${model.agentSelectable}" ${cannotEnable ? 'disabled' : ''}>API ${model.callEnabled ? '끄기' : '켜기'}</button>
+        <button type="button" class="secondary" data-openai-model-action="agent" data-model="${escapeHtml(model.id)}" data-call-enabled="${model.callEnabled}" data-agent-selectable="${!model.agentSelectable}" ${cannotEnable || !model.callEnabled ? 'disabled' : ''}>Agent ${model.agentSelectable ? '제외' : '허용'}</button>
+        <button type="button" class="secondary" data-openai-model-action="default" data-model="${escapeHtml(model.id)}" ${cannotEnable || !model.agentSelectable || model.isDefault ? 'disabled' : ''}>기본 지정</button>
+        <button type="button" class="ghost" data-openai-model-action="probe" data-model="${escapeHtml(model.id)}" ${cannotProbe ? 'disabled' : ''}>연결 재확인</button>
       </div>
     </article>`;
   }).join('') || '<p class="empty-usage">선택한 조건에 맞는 모델이 없습니다.</p>';
@@ -538,6 +567,7 @@ function renderOpenaiUsage(data) {
     ? `즉시 원장 ${new Date(data.updatedAt).toLocaleString('ko-KR')}`
     : `UTC ${data.dayUtc} · 아직 guard 호출 없음`;
   renderOpenaiProvider(data.provider);
+  renderOpenaiMonitor(data.monitor, data.provider);
   const groupCards = data.groups.map(group => `
     <article class="usage-group-card">
       <div class="usage-group-head"><div><h3>${escapeHtml(group.label)}</h3><p>${formatTokens(group.tokens)} / ${formatTokens(group.freeLimit)} token</p></div><strong>${group.percent}%</strong></div>
@@ -687,6 +717,9 @@ document.addEventListener('click', event => {
 toggleOpenaiProvider.addEventListener('click', () => previewAction('openai.provider.set', { enabled: toggleOpenaiProvider.dataset.enabled === 'true' }));
 openaiDefaultModel.addEventListener('change', () => { setOpenaiDefaultModel.disabled = !openaiDefaultModel.value; });
 setOpenaiDefaultModel.addEventListener('click', () => previewAction('openai.default-model.set', { model: openaiDefaultModel.value }));
+probeAllOpenaiModels.addEventListener('click', () => previewAction('openai.catalog.probe-all', {}));
+checkOpenaiCatalog.addEventListener('click', () => previewAction('openai.catalog.check', {}));
+applyOpenaiAgentGuard.addEventListener('click', () => previewAction('openai.agent-guard.apply', {}));
 switchAccount.addEventListener('click', () => previewAction('account.switch', { selector: accountSelector.value }));
 switchOcxAccount.addEventListener('click', () => previewAction('ocx.account.use', { selector: ocxAccountSelector.value }));
 actionDialog.addEventListener('close', () => {
