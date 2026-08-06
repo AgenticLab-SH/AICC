@@ -11,6 +11,7 @@ import { redactText, sanitize } from './lib/redact.mjs';
 import { defaultPythonCommand } from './config.mjs';
 import { openaiProviderSnapshot, openaiProviderStatus } from './openai-usage.mjs';
 import { codexRouteStatus } from './adapters/codex-routes.mjs';
+import { openaiAgentGuardStatus } from '../tools/platform/codex/install-openai-api-guard.mjs';
 
 const previewLifetimeMs = 2 * 60 * 1000;
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -99,6 +100,24 @@ function openaiProbeSnapshot(status) {
       checkedAt: item.availability?.checkedAt || null
     }]))
   };
+}
+
+function openaiCatalogSnapshot(status) {
+  return {
+    ...openaiProbeSnapshot(status),
+    probeBatch: status?.probeBatch ? {
+      id: status.probeBatch.id || null,
+      status: status.probeBatch.status || null,
+      attempted: status.probeBatch.attempted || 0,
+      completedAt: status.probeBatch.completedAt || null
+    } : null,
+    catalogCheckedAt: status?.catalog?.check?.checkedAt || null,
+    catalogCheckStatus: status?.catalog?.check?.status || 'not_checked'
+  };
+}
+
+function openaiAgentGuardSnapshot(status) {
+  return { ok: Boolean(status?.ok), scopeCount: status?.scopeCount || 0, guardedCount: status?.guardedCount || 0 };
 }
 
 function resolveOcxAccount(selector, status) {
@@ -446,6 +465,55 @@ function buildDefinitions(options) {
       }),
       command: args => openaiCommand(['probe', '--model', args.model]),
       verify: (state, args, before, result) => Boolean(result.ok && state.availability[args.model]?.checkedAt && state.availability[args.model]?.checkedAt !== before.availability[args.model]?.checkedAt)
+    },
+    'openai.catalog.probe-all': {
+      title: 'OpenAI 계정 무료 모델 전수 확인',
+      kind: 'diagnostic',
+      timeoutMs: 15 * 60_000,
+      readState: options.getOpenaiProviderStatus,
+      snapshot: openaiCatalogSnapshot,
+      prepare(_args, state) {
+        if (!state.enabled) throw new ActionError('provider_disabled', '먼저 OpenAI API 전체 사용을 켜야 합니다.', 409);
+        return {};
+      },
+      describe: () => ({
+        impact: '현재 계정 Data Controls에 표시되었거나 Usage에서 incentive 귀속이 확인된 모델에만 고정 비민감 문장으로 최소 요청을 순차 전송하고 성공·실패·사용 token·응답 시간을 기록합니다.',
+        warnings: ['실제 API token을 사용합니다.', '계정 화면이 기타 모델은 과금된다고 명시하므로 전역 후보 30개를 무조건 호출하지 않습니다.', '전수 확인 중에도 90% 선제 정지와 프로젝트 예산이 적용됩니다.'],
+        rollback: '사용 token은 되돌릴 수 없지만 provider 정책은 변경하지 않습니다.'
+      }),
+      command: () => openaiCommand(['probe-all']),
+      verify: (state, _args, before, result) => Boolean(result.ok && state.probeBatch?.status === 'completed' && state.probeBatch?.id && state.probeBatch.id !== before.probeBatch?.id)
+    },
+    'openai.catalog.check': {
+      title: 'OpenAI 공식 catalog 갱신 확인',
+      kind: 'diagnostic',
+      timeoutMs: 60_000,
+      readState: options.getOpenaiProviderStatus,
+      snapshot: openaiCatalogSnapshot,
+      prepare: () => ({}),
+      describe: () => ({
+        impact: 'OpenAI 도움말의 무료 대상 목록과 Developer 모델 catalog를 읽어 현재 AICC snapshot과 추가·제거 차이를 계산합니다.',
+        warnings: ['source code는 자동 수정하지 않고 검토 가능한 private 후보 기록만 갱신합니다.'],
+        rollback: '진단 기록만 갱신하므로 별도 rollback이 필요하지 않습니다.'
+      }),
+      command: () => openaiCommand(['catalog-check']),
+      verify: (state, _args, before, result) => Boolean(result.ok && state.catalogCheckedAt && state.catalogCheckedAt !== before.catalogCheckedAt)
+    },
+    'openai.agent-guard.apply': {
+      title: 'Codex OpenAI API 우회 방지 적용',
+      kind: 'security',
+      timeoutMs: 60_000,
+      readState: options.getOpenaiAgentGuardStatus,
+      snapshot: openaiAgentGuardSnapshot,
+      prepare: () => ({}),
+      describe: () => ({
+        impact: 'Codex App과 분리 계정 config에서 OpenAI key 환경변수를 제외하고, direct api.openai.com 및 Keychain 직접 조회를 차단하는 managed PreToolUse hook를 적용합니다.',
+        warnings: ['새 Codex 작업부터 확실히 적용됩니다.', '사용자가 Codex 밖에서 직접 실행하는 프로그램은 차단하지 않습니다.', '기존 requirements.toml이 AICC 소유가 아니면 덮어쓰지 않고 실패합니다.'],
+        rollback: 'AICC private backup의 기존 config와 requirements를 복원합니다.'
+      }),
+      command: () => openaiCommand(['agent-guard', '--action', 'apply']),
+      verify: (state, _args, _before, result) => Boolean(result.ok && state.ok && state.guardedCount === state.scopeCount),
+      rollback: () => openaiCommand(['agent-guard', '--action', 'rollback'])
     }
   };
 }
@@ -467,7 +535,8 @@ export function createActionController(options = {}) {
     getCodexRouteStatus: options.getCodexRouteStatus ?? (() => codexRouteStatus(options.codexRoutes)),
     getAccountStatus: options.getAccountStatus ?? (() => accountStatus(options.accounts)),
     getOcxAccountStatus: options.getOcxAccountStatus ?? (() => ocxAccountStatus(options.ocxAccounts)),
-    getOpenaiProviderStatus: options.getOpenaiProviderStatus ?? (() => openaiProviderStatus({ env: { ...process.env, AICC_STATE_ROOT: stateRoot } }))
+    getOpenaiProviderStatus: options.getOpenaiProviderStatus ?? (() => openaiProviderStatus({ env: { ...process.env, AICC_STATE_ROOT: stateRoot } })),
+    getOpenaiAgentGuardStatus: options.getOpenaiAgentGuardStatus ?? (() => openaiAgentGuardStatus({ stateRoot }))
   });
 
   function list() {

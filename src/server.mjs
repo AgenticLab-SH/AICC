@@ -6,7 +6,8 @@ import { ActionError, createActionController } from './actions.mjs';
 import { openLocalApp } from './apps.mjs';
 import { toolCatalog } from './catalog.mjs';
 import { collectStatus } from './status.mjs';
-import { openaiUsageStatus } from './openai-usage.mjs';
+import { checkOpenaiCatalog } from './openai-catalog-check.mjs';
+import { evaluateOpenaiMonitor, openaiUsageStatus } from './openai-usage.mjs';
 import { runTask } from './tasks.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -182,6 +183,24 @@ export function startServer(options = {}) {
     console.log(`AI Control Center: http://${listenHost}:${actualPort}`);
     console.log('Mode: local-control');
   });
+  if (options.backgroundOpenaiMonitor !== false) {
+    const monitor = options.evaluateOpenaiMonitor ?? evaluateOpenaiMonitor;
+    const catalogCheck = options.checkOpenaiCatalog ?? checkOpenaiCatalog;
+    const runMonitor = () => Promise.resolve().then(() => monitor()).catch(error => console.error(`OpenAI monitor: ${error.message}`));
+    const runCatalogCheck = () => Promise.resolve().then(() => catalogCheck()).catch(error => console.error(`OpenAI catalog check: ${error.message}`));
+    const monitorTimer = setInterval(runMonitor, options.openaiMonitorIntervalMs ?? 60_000);
+    const catalogTimer = setInterval(runCatalogCheck, options.openaiCatalogIntervalMs ?? 6 * 60 * 60_000);
+    monitorTimer.unref();
+    catalogTimer.unref();
+    server.once('listening', () => {
+      runMonitor();
+      setTimeout(runCatalogCheck, 5_000).unref();
+    });
+    server.once('close', () => {
+      clearInterval(monitorTimer);
+      clearInterval(catalogTimer);
+    });
+  }
   return server;
 }
 
