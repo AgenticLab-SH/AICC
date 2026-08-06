@@ -21,7 +21,9 @@ function portableText(value) {
 function portableCodexConfig(value) {
   const generatedSections = /^(marketplaces\.|tui\.model_availability_nux$)/;
   let skip = false;
-  return portableText(value).split(/\r?\n/).filter(line => {
+  return portableText(value)
+    .replaceAll('${HOME}/dev/projects/tools/ai-control-center', '${HOME}/dev/projects/tools/AICC')
+    .split(/\r?\n/).filter(line => {
     const section = line.match(/^\[([^\]]+)\]\s*$/)?.[1];
     if (section) skip = generatedSections.test(section);
     return !skip;
