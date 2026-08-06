@@ -15,6 +15,7 @@
         <a class="nav-link active" href="#home"><span aria-hidden="true">⌂</span>홈</a>
         <a class="nav-link" href="#tools"><span aria-hidden="true">⌕</span>모든 도구</a>
         <a class="nav-link" href="#accounts"><span aria-hidden="true">◎</span>계정</a>
+        <a class="nav-link" href="#architecture"><span aria-hidden="true">⌘</span>구조 지도</a>
         <a class="nav-link" href="#web-gpt"><span aria-hidden="true">W</span>Web GPT</a>
         <a class="nav-link" href="#workspace"><span aria-hidden="true">M</span>Workspace</a>
         <a class="nav-link" href="#controls"><span aria-hidden="true">◇</span>연결 제어</a>
@@ -54,6 +55,72 @@
       <section aria-labelledby="quickTitle">
         <div class="section-title"><div><p class="eyebrow">QUICK START</p><h2 id="quickTitle">자주 쓰는 기능</h2></div><a href="#tools">모두 보기</a></div>
         <div id="quickTools" class="quick-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="architecture" class="anchor-section" aria-labelledby="architectureTitle">
+        <div class="section-title"><div><p class="eyebrow">SYSTEM CANVAS</p><h2 id="architectureTitle">AICC 전체 구조 지도</h2></div><span>누가 추론하고 · 어디로 연결되고 · 무엇을 실행하는지</span></div>
+        <article class="panel architecture-panel">
+          <div class="canvas-toolbar">
+            <div class="map-filters" role="group" aria-label="구조 지도 경로 필터">
+              <button type="button" class="map-filter active" data-architecture-filter="all" aria-pressed="true">전체</button>
+              <button type="button" class="map-filter" data-architecture-filter="web">Codex Web</button>
+              <button type="button" class="map-filter" data-architecture-filter="workspace">외부 ChatGPT</button>
+              <button type="button" class="map-filter" data-architecture-filter="routes">OCX·Native</button>
+              <button type="button" class="map-filter" data-architecture-filter="sources">원본 계보</button>
+            </div>
+            <div class="map-legend" aria-label="구조 지도 범례"><span class="interface">사용 화면</span><span class="inference">추론</span><span class="transport">연결</span><span class="execution">실행</span></div>
+          </div>
+
+          <div class="system-canvas" aria-label="AICC 시스템 연결 흐름">
+            <article class="flow-lane" data-map-groups="web">
+              <header><span class="lane-index">01</span><div><strong>Codex Desktop에서 Web 모델</strong><small>ChatGPT Web만 추론하고 현재 Codex 프로젝트 도구를 실행</small></div><span class="live-pill" data-live-state="web-bridge">확인 중</span></header>
+              <div class="flow-track">
+                <div class="map-node interface"><span>작업 화면</span><strong>Codex Desktop</strong><small>문맥 · 승인 · 도구 스키마</small></div><i aria-hidden="true">→</i>
+                <div class="map-node transport"><span>로컬 브리지</span><strong>17841</strong><small>Web 모델 분기</small></div><i aria-hidden="true">→</i>
+                <div class="map-node inference"><span>유일한 추론 주체</span><strong>ChatGPT Web</strong><small>임시·저장 / 낮음~매우 높음</small></div><i aria-hidden="true">→</i>
+                <div class="map-node transport"><span>전용 Secure Tunnel</span><strong>Codex Native MCP Tunnel</strong><small data-live-detail="web-harness">Full 하네스 상태 확인 중</small></div><i aria-hidden="true">→</i>
+                <div class="map-node execution"><span>실행 경계</span><strong>현재 Codex 프로젝트</strong><small>파일 · 터미널 · 설치된 도구</small></div>
+              </div>
+            </article>
+
+            <article class="flow-lane" data-map-groups="workspace">
+              <header><span class="lane-index">02</span><div><strong>폰·웹 ChatGPT에서 이 Mac 사용</strong><small>등록한 작업공간만 lease로 열어 고정 도구 실행</small></div><span class="live-pill" data-live-state="workspace-tunnel">확인 중</span></header>
+              <div class="flow-track">
+                <div class="map-node interface"><span>외부 화면</span><strong>ChatGPT Business</strong><small>폰 · 다른 컴퓨터 · 웹</small></div><i aria-hidden="true">→</i>
+                <div class="map-node inference"><span>유일한 추론 주체</span><strong>현재 ChatGPT 대화</strong><small>Codex·OCX 모델 불사용</small></div><i aria-hidden="true">→</i>
+                <div class="map-node transport"><span>전용 Secure Tunnel</span><strong>AICC Workspace Tunnel</strong><small data-live-detail="workspace-tunnel">Tunnel 상태 확인 중</small></div><i aria-hidden="true">→</i>
+                <div class="map-node execution"><span>고정 MCP 서버</span><strong>Workspace MCP</strong><small>13개 경계 도구</small></div><i aria-hidden="true">→</i>
+                <div class="map-node execution"><span>실행 경계</span><strong>등록 Git 작업공간</strong><small>workspace_id + 만료 lease</small></div>
+              </div>
+            </article>
+
+            <article class="flow-lane compact-lane" data-map-groups="routes">
+              <header><span class="lane-index">03</span><div><strong>독립 모델 복구 경로</strong><small>Web GPT와 섞지 않고 각각의 provider·상태를 유지</small></div><span class="live-pill" data-live-state="ocx">확인 중</span></header>
+              <div class="route-pairs">
+                <div class="route-pair"><div class="map-node interface"><strong>Codex Desktop</strong></div><i>→</i><div class="map-node transport"><strong>17841 통과</strong><small>Web 외 모델</small></div><i>→</i><div class="map-node inference"><strong>OCX 10100</strong><small>선택 provider</small></div></div>
+                <div class="route-pair"><div class="map-node interface"><strong>codex-native 프로필</strong></div><i>→</i><div class="map-node inference"><strong>OpenAI 공식 Codex</strong><small>브리지 장애 복구</small></div></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="tunnel-decision" data-map-groups="web workspace">
+            <span class="decision-mark">≠</span><div><strong>두 Tunnel은 운영 화면에서 함께 관리하되 전송 경로는 분리합니다.</strong><p>Codex Native는 매 turn 달라지는 현재 Codex 도구를 중계하고, AICC Workspace는 외부 ChatGPT에 13개 고정 도구를 게시합니다. 하나로 합치면 권한·수명주기·장애 범위가 섞이므로 보안과 복구성이 나빠집니다.</p></div>
+            <a class="button-link secondary" href="/aicc-architecture.canvas" download>Obsidian Canvas 받기</a>
+          </div>
+        </article>
+
+        <article class="panel lineage-panel" data-map-groups="sources" aria-labelledby="lineageTitle">
+          <div class="panel-title"><div><p class="eyebrow">SOURCE LINEAGE</p><h3 id="lineageTitle">어떤 원본이 어디에 반영됐나</h3></div><span class="capability">코드 채택과 아이디어 참고를 구분</span></div>
+          <div class="lineage-grid">
+            <a class="lineage-card active-source" href="https://github.com/miuuyy/codex-chatgpt-web" target="_blank" rel="noopener"><span>FORK · 업데이트 추적</span><strong>codex-chatgpt-web</strong><p>ChatGPT 웹 자동화와 Responses 브리지의 원형. AICC fork에서 17841, 한국어 모델명, launcher·복구·Full MCP를 확장합니다.</p><small>→ Codex Web GPT 앱</small></a>
+            <a class="lineage-card active-source" href="https://github.com/lidge-jun/opencodex" target="_blank" rel="noopener"><span>PINNED SUBMODULE · 업데이트 추적</span><strong>OpenCodex</strong><p>OCX 10100 provider 라우팅의 원본. AICC는 고정 커밋을 검증한 뒤 별도 adapter로 운영합니다.</p><small>→ OCX 모델 경로</small></a>
+            <a class="lineage-card active-source" href="https://github.com/openai/tunnel-client" target="_blank" rel="noopener"><span>PINNED BINARY · 보안 업데이트 추적</span><strong>OpenAI Secure MCP Tunnel</strong><p>방화벽 뒤 로컬 MCP에 나가는 HTTPS 경로를 제공합니다. 역할별 profile과 key는 private runtime에 둡니다.</p><small>→ 두 개의 전용 Tunnel</small></a>
+            <a class="lineage-card owned-source" href="https://github.com/AgenticLab-SH/AICC" target="_blank" rel="noopener"><span>AICC 소유 구현</span><strong>AICC Workspace MCP</strong><p>작업공간 registry, lease, 경로 검증, seatbelt, 13개 도구와 대시보드는 AICC가 직접 구현·유지합니다.</p><small>→ 외부 ChatGPT 로컬 작업</small></a>
+            <a class="lineage-card reference-source" href="https://github.com/Waishnav/devspace" target="_blank" rel="noopener"><span>아이디어만 참고 · 자동 추적 안 함</span><strong>Waishnav/devspace</strong><p>범용 workspace 제어 방향을 비교했습니다. 코드·패키지·프로세스는 채택하지 않았고 필요한 경계는 AICC가 다시 구현했습니다.</p><small>→ 런타임 의존성 없음</small></a>
+            <a class="lineage-card reference-source" href="https://jsoncanvas.org/" target="_blank" rel="noopener"><span>표현 규격 참고 · 런타임 의존성 없음</span><strong>Obsidian JSON Canvas</strong><p>카드·그룹·연결선 방식과 공개 .canvas 규격을 구조 지도에 활용했습니다. Obsidian이나 커뮤니티 플러그인 설치는 필요 없습니다.</p><small>→ 이 구조 지도와 Canvas 내보내기</small></a>
+          </div>
+          <p class="panel-footnote lineage-note">업데이트를 계속 추적하는 대상은 실제 실행 코드인 codex-chatgpt-web, OpenCodex, tunnel-client와 MCP SDK입니다. DevSpace와 시각화 참고 소스는 보안·기능 의존성이 없으므로 자동 업데이트 대상이 아닙니다.</p>
+        </article>
       </section>
 
       <section id="tools" class="anchor-section" aria-labelledby="toolsTitle">

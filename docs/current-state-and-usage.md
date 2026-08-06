@@ -12,8 +12,11 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 - Business 앱 `AICC Workspace`: 13개 action으로 새로 고침 완료
 - 지침: AICC 정본과 Codex·Claude 배포본 일치, Codex agent는 `luna_worker` 1개
 - 브라우저: 기본 HTTP/HTTPS는 CDP Whale 9335, 브라우저 정책 20/20 통과
-- Web GPT 앱: v2.0.0-aicc.1, 전용 프로필 로그인·High 동작 시험·17841 bridge와
-  Codex 모델 route 활성화 완료
+- Web GPT 앱: v2.0.0-aicc.1, 전용 프로필 로그인·17841 bridge와 Codex 모델 route
+  활성화 완료. 2026-08-06에 Pro를 제외한 임시·저장 × 낮음·중간·높음·매우 높음
+  8개 조합을 실제 ephemeral Codex turn으로 모두 검증했다. 임시 4개는 병렬 실행에서
+  각 25.27~25.38초, 저장 4개는 15.69~28.93초였고 모두 요청한 `정상` 응답으로
+  종료했다. 이 측정값은 네트워크와 ChatGPT UI 상태에 따라 달라질 수 있다.
 - OpenAI Tunnel은 역할별로 분리한다. `AICC Workspace`는 외부 ChatGPT용이고,
   `Codex Native MCP`는 Codex Desktop Web 모델의 전체 하네스용이다. 기존 Workspace
   Tunnel을 전체 하네스에 재사용하지 않는다.
@@ -72,6 +75,9 @@ aicc status --json
 대시보드는 loopback에만 열리며 외부에 공개하지 않는다. 계정, OCX, Native,
 Web GPT, Workspace MCP, 브라우저와 지침 상태를 한 화면에서 읽는다. 위험한 변경은
 `aicc action preview`의 영향과 복구 방법을 확인한 뒤 일회용 확인 토큰으로 실행한다.
+`구조 지도`에서는 네 실행 경로, 두 Tunnel의 역할 차이, 실제 채택한 upstream과
+아이디어만 참고한 소스를 분리해 볼 수 있다. `Obsidian Canvas 받기`로 공개 JSON
+Canvas 파일을 내려받을 수 있으며 Obsidian 플러그인 설치는 필요 없다.
 
 ## Codex Desktop에서 Web GPT 사용
 
@@ -183,6 +189,10 @@ Web GPT setup은 기존 loopback upstream과 catalog를 읽어 10100 OCX route�
 `devspace`는 현재 설치·실행·서브모듈 의존성이 아니다. workspace 제어 아이디어만
 검토했고, 필요한 기능은 AICC 소유의 `components/workspace-mcp`로 다시 구현했다.
 `codex-chatgpt-web`과 코드로 융합된 것도 아니다.
+
+따라서 DevSpace release를 자동 반영하거나 보안 업데이트 대상으로 추적하지 않는다.
+새 기능을 비교할 제품 조사 때만 선택적으로 다시 검토한다. 실제 업데이트 추적 대상은
+실행 코드인 `codex-chatgpt-web`, OpenCodex, `openai/tunnel-client`, MCP SDK다.
 
 AICC `guidance/`가 지침·스킬·agent의 정본이며 Codex·Claude home에는 생성본만
 배포한다. 인증, task DB와 런타임 cache는 각 제품의 native home에 둔다. public

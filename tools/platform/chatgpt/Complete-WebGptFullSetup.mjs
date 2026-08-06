@@ -65,6 +65,27 @@ async function waitForMode(port, mode, oldPid, timeoutMs = 90_000) {
   throw new Error(`Responses proxy did not restart in ${mode} mode: ${redact(JSON.stringify(last))}`);
 }
 
+async function waitForStop(port, oldPid, timeoutMs = 60_000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const current = await health(port);
+    if (!current || current.pid !== oldPid) return current;
+    await wait(250);
+  }
+  throw new Error(`Responses proxy pid ${String(oldPid)} did not release port ${String(port)}`);
+}
+
+function stagingPortFor(port) {
+  const candidate = port + 1;
+  if (!Number.isInteger(candidate) || candidate > 65_535) throw new Error('no safe staging port is available');
+  return candidate;
+}
+
+function terminate(pid) {
+  try { process.kill(pid, 'SIGTERM'); }
+  catch (error) { if (error?.code !== 'ESRCH') throw error; }
+}
+
 async function main() {
   const cli = required('--cli');
   const tunnelId = option('--tunnel-id');
@@ -80,6 +101,7 @@ async function main() {
   }
   const initial = JSON.parse(fs.readFileSync(configFile, 'utf8'));
   const port = Number(initial.port || 17841);
+  const stagingPort = stagingPortFor(port);
   if (initial.host !== '127.0.0.1' || !Number.isInteger(port)) throw new Error('existing bridge config is not loopback');
   const deadline = Date.now() + timeoutMs;
   let drained = false;
@@ -108,10 +130,20 @@ async function main() {
       run(cli, [
         'setup', '--full', '--tunnel-id', tunnelId, '--runtime-key-file', runtimeKeyFile,
         '--browser-host-descriptor', browserDescriptor, '--app-name', 'Codex Native',
-        '--preserve-codex-route', '--restart-service', '--acknowledge-unofficial'
+        '--port', String(stagingPort), '--preserve-codex-route', '--acknowledge-unofficial'
       ]);
-      process.kill(originalPid, 'SIGTERM');
-      current = await waitForMode(port, 'full', originalPid);
+      terminate(originalPid);
+      await waitForStop(port, originalPid);
+      const staged = await waitForMode(stagingPort, 'full', originalPid);
+      const fullConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+      if (fullConfig.mode !== 'full' || fullConfig.port !== stagingPort) {
+        throw new Error('launcher did not persist the staged full-mode configuration');
+      }
+      atomicJson(configFile, { ...fullConfig, port });
+      await admin(stagingPort, fullConfig.controlToken, 'drain');
+      terminate(staged.pid);
+      await waitForStop(stagingPort, staged.pid);
+      current = await waitForMode(port, 'full', staged.pid);
     } else if (drained) {
       await admin(port, initial.controlToken, 'resume');
     }
@@ -143,8 +175,13 @@ async function main() {
       }
       fs.copyFileSync(backupConfig, configFile);
       fs.chmodSync(configFile, 0o600);
+      const staged = await health(stagingPort);
+      if (staged?.pid) {
+        terminate(staged.pid);
+        await waitForStop(stagingPort, staged.pid).catch(() => {});
+      }
       const current = await health(port);
-      if (current?.pid) process.kill(current.pid, 'SIGTERM');
+      if (current?.pid) terminate(current.pid);
       if (current?.pid) await waitForMode(port, initial.mode, current.pid, 60_000);
       else if (drained) await admin(port, initial.controlToken, 'resume').catch(() => {});
     } catch (rollbackError) {
