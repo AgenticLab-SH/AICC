@@ -51,6 +51,7 @@ export function installDashboardLaunchAgent(options = {}) {
   const spawn = options.spawnSync ?? spawnSync;
   const pause = options.pause ?? blockingPause;
   const bootstrapAttempts = Math.max(1, Number(options.bootstrapAttempts ?? 6));
+  const healthAttempts = Math.max(1, Number(options.healthAttempts ?? 20));
   const uid = options.uid ?? (typeof process.getuid === 'function' ? process.getuid() : null);
   if (!Number.isInteger(uid) || uid < 0) throw new Error('macOS 사용자 UID를 확인할 수 없습니다.');
   for (const required of [node, path.join(root, 'src', 'server.mjs'), path.join(root, 'package.json')]) {
@@ -87,7 +88,23 @@ export function installDashboardLaunchAgent(options = {}) {
     const registered = spawn('launchctl', ['print', `${domain}/${label}`], { stdio: 'ignore' });
     if (registered.status !== 0) throw new Error(`AICC Dashboard 자동 시작 등록에 실패했습니다: ${launchdMessage(loaded)}`);
   }
-  return { ok: true, label, plist, port: Number(port), bootstrapAttempts: attempt + 1 };
+  let health = null;
+  let healthAttempt = 0;
+  const healthUrl = `http://127.0.0.1:${port}/healthz`;
+  for (; healthAttempt < healthAttempts; healthAttempt += 1) {
+    health = spawn('curl', ['--fail', '--silent', '--show-error', '--max-time', '2', healthUrl], { encoding: 'utf8' });
+    if (health.status === 0) break;
+    if (healthAttempt + 1 < healthAttempts) pause(Math.min(500, 100 + (healthAttempt * 50)));
+  }
+  if (health?.status !== 0) throw new Error(`AICC Dashboard가 등록됐지만 healthz 준비를 확인하지 못했습니다: ${launchdMessage(health)}`);
+  return {
+    ok: true,
+    label,
+    plist,
+    port: Number(port),
+    bootstrapAttempts: attempt + 1,
+    healthAttempts: healthAttempt + 1
+  };
 }
 
 if (path.resolve(process.argv[1] || '') === path.resolve(fileURLToPath(import.meta.url))) {
