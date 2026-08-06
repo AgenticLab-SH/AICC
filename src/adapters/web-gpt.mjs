@@ -57,7 +57,10 @@ export async function webGptStatus(options = {}) {
   const codexConfigPath = options.codexConfigPath ?? path.join(home, '.codex', 'config.toml');
   const appPath = options.appPath ?? '/Applications/Codex Web GPT.app';
   const cliPath = options.cliPath ?? path.join(appPath, 'Contents', 'Resources', 'runtime', 'bin', 'codex-chatgpt-web');
+  const launcherStatePath = options.launcherStatePath
+    ?? path.join(home, 'Library', 'Application Support', 'Codex Web GPT', 'launcher-state.json');
   const config = readJson(configPath);
+  const launcherState = readJson(launcherStatePath);
   const port = Number(config?.port || 17841);
   const baseUrl = `http://127.0.0.1:${port}/v1`;
   const runtime = await health(`http://127.0.0.1:${port}/healthz`, options.fetch ?? fetch, options.timeoutMs ?? 2_500);
@@ -74,6 +77,7 @@ export async function webGptStatus(options = {}) {
     ? sanitize(await (options.tunnelStatus ?? defaultTunnelStatus)(cliPath))
     : null;
   const harnessReady = harnessConfigured && tunnelRuntime?.ready === true && runtime?.mode === 'full';
+  const connectorVerified = harnessReady && launcherState?.mcpSetupComplete === true;
   const state = healthy && routeActive && (mode !== 'full' || harnessReady)
     ? 'ready'
     : installed ? 'attention' : 'unavailable';
@@ -104,7 +108,8 @@ export async function webGptStatus(options = {}) {
     harnessConfigured,
     harnessReady,
     tunnelRuntime,
-    connectorVerification: harnessReady ? 'chatgpt-required' : 'not-ready',
+    connectorVerified,
+    connectorVerification: connectorVerified ? 'verified' : harnessReady ? 'chatgpt-required' : 'not-ready',
     connectorName: harnessConfigured ? config?.appName ?? 'Codex Native' : null,
     harnessScope: 'current-codex-project',
     proAvailable,

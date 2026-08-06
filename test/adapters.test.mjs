@@ -57,12 +57,14 @@ test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex rout
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configPath = path.join(root, 'config.json');
   const codexConfigPath = path.join(root, 'codex.toml');
+  const launcherStatePath = path.join(root, 'launcher-state.json');
   fs.writeFileSync(configPath, JSON.stringify({
     port: 17841, releaseVersion: '2.0.0', mode: 'full', browserHost: 'launcher', tunnel: { configured: true }
   }));
   fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:10100/v1"\n');
+  fs.writeFileSync(launcherStatePath, JSON.stringify({ mcpSetupComplete: true }));
   const status = await webGptStatus({
-    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
+    configPath, codexConfigPath, launcherStatePath, appPath: path.join(root, 'missing.app'),
     fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0', mode: 'full', active_browser_turns: 0 }) }),
     tunnelStatus: async () => ({ running: true, healthy: true, ready: true, state: 'ready' })
   });
@@ -75,6 +77,8 @@ test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex rout
   assert.equal(status.localHarnessConsumesModelTokens, false);
   assert.equal(status.harnessReady, true);
   assert.equal(status.tunnelRuntime.ready, true);
+  assert.equal(status.connectorVerified, true);
+  assert.equal(status.connectorVerification, 'verified');
 });
 
 test('Web GPT adapter does not claim local harness tools in browser-only mode', async t => {
@@ -85,7 +89,7 @@ test('Web GPT adapter does not claim local harness tools in browser-only mode', 
   fs.writeFileSync(configPath, JSON.stringify({ port: 17841, releaseVersion: '2.0.0', mode: 'browser-only' }));
   fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
   const status = await webGptStatus({
-    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
+    configPath, codexConfigPath, launcherStatePath: path.join(root, 'missing-launcher-state.json'), appPath: path.join(root, 'missing.app'),
     fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0' }) })
   });
   assert.equal(status.state, 'ready');
@@ -105,7 +109,7 @@ test('Web GPT adapter reports attention when full harness tunnel is not ready', 
   }));
   fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
   const status = await webGptStatus({
-    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
+    configPath, codexConfigPath, launcherStatePath: path.join(root, 'missing-launcher-state.json'), appPath: path.join(root, 'missing.app'),
     fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0', mode: 'full' }) }),
     tunnelStatus: async () => ({ running: true, healthy: false, ready: false, state: 'starting' })
   });
