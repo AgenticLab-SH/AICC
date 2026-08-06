@@ -68,12 +68,14 @@ if (fs.existsSync(ocxConfigFile)) {
   write('profile/ocx/settings.safe.json', JSON.stringify(safe, null, 2));
 }
 
-const gitCommit = command('git', ['-C', projectRoot, 'rev-parse', 'HEAD']);
+const publicRepository = 'https://github.com/AgenticLab-SH/AICC.git';
+const remoteCommit = command('git', ['ls-remote', publicRepository, 'refs/heads/main'])?.split(/\s+/)[0];
+const gitCommit = process.env.AICC_PUBLIC_COMMIT || remoteCommit || command('git', ['-C', projectRoot, 'rev-parse', 'HEAD']);
 const inventory = {
   schemaVersion: 1,
   generatedAt: new Date().toISOString(),
   publicAicc: {
-    repository: 'https://github.com/AgenticLab-SH/AICC.git',
+    repository: publicRepository,
     commit: gitCommit
   },
   runtimes: {
