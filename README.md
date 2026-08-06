@@ -8,21 +8,26 @@ AI Control Center(AICC)는 GPT 계정, Codex/OCX 모델 경로, ChatGPT의 로�
 ## 최종 구조
 
 ```text
-Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델)
-                                  \-> OCX 10100 (Web 외 모델 전달)
+Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델 추론)
+                 |                         |
+                 |                         \-> Codex Native MCP 전용 Tunnel
+                 |                             -> 현재 Codex 작업의 도구 하네스
+                 \-> OCX 10100 (Web 외 모델 전달)
 
 Native Codex profile -> OpenAI 공식 Codex 경로 (복구·독립 사용)
 
-ChatGPT Web -> OpenAI Secure MCP Tunnel -> AICC Workspace MCP
-                                         -> 등록 Git 워크스페이스
+외부 ChatGPT -> AICC Workspace 전용 Tunnel -> AICC Workspace MCP
+                                             -> 등록 Git 워크스페이스
 ```
 
 Codex Desktop에서는 `Web / 임시|저장 / 낮음~매우 높음` 모델을 선택해 ChatGPT
 Web을 추론 백엔드로 쓸 수 있습니다. Web 모델의 추론은 OCX나 로컬 Codex 모델
 토큰을 사용하지 않습니다. 브라우저 전용 모드는 문맥·이미지만 전달하고, 별도 MCP
 설정을 마친 전체 하네스 모드에서만 현재 Codex 작업의 파일·터미널·승인·도구를
-사용합니다. 외부 ChatGPT에서 로컬을 편집하는 별도 경로는 `AICC Workspace MCP`가
-담당하며 Codex 작업을 생성하거나 OCX를 호출하지 않습니다.
+사용합니다. 이 전용 Tunnel은 외부 ChatGPT용 `AICC Workspace MCP` Tunnel과 다른
+런타임입니다. 두 경로를 한 Tunnel ID로 재사용하지 않습니다. 외부 ChatGPT에서
+로컬을 편집하는 별도 경로는 `AICC Workspace MCP`가 담당하며 Codex 작업을
+생성하거나 OCX를 호출하지 않습니다.
 
 현재 검증 상태, 일상 사용법과 기존 질문의 최종 답은
 [현재 운영 상태와 사용법](docs/current-state-and-usage.md)에 정리되어 있습니다.
@@ -62,6 +67,9 @@ aicc agents plan             # 에이전트 배포 미리보기
 aicc agents deploy           # AICC 정본 배포
 aicc workspace configure     # 모든 Git 워크스페이스 별칭 등록
 aicc workspace status        # STDIO 서버와 Secure Tunnel 상태
+aicc web-gpt status --json   # Web 모델·전체 하네스·전용 Tunnel 상태
+aicc web-gpt doctor --json   # Codex Web GPT 자체 진단
+aicc web-gpt open-connectors # ChatGPT 커넥터 설정 열기
 aicc guidance check          # 지침·스킬 정합성
 aicc action list             # 확인 가능한 변경 작업
 ```

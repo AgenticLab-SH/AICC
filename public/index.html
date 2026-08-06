@@ -70,6 +70,9 @@
             <dl class="metric-list">
               <div><dt>버전</dt><dd id="webGptVersion">–</dd></div>
               <div><dt>실행 모드</dt><dd id="webGptMode">–</dd></div>
+              <div><dt>Codex 도구 하네스</dt><dd id="webGptHarness">–</dd></div>
+              <div><dt>전용 MCP Tunnel</dt><dd id="webGptTunnel">–</dd></div>
+              <div><dt>ChatGPT 커넥터</dt><dd id="webGptConnector">–</dd></div>
               <div><dt>활성 브라우저 턴</dt><dd id="webGptTurns">–</dd></div>
               <div><dt>모델 추론 토큰</dt><dd>ChatGPT Web만 사용</dd></div>
             </dl>
@@ -82,11 +85,12 @@
           </article>
         </div>
         <article class="panel route-topology" aria-labelledby="routeTopologyTitle">
-          <div class="panel-title"><div><p class="eyebrow">ROUTING MAP</p><h3 id="routeTopologyTitle">서로 독립된 세 가지 모델 경로</h3></div><span class="capability">한 선택기에 통합</span></div>
+          <div class="panel-title"><div><p class="eyebrow">ROUTING MAP</p><h3 id="routeTopologyTitle">서로 분리된 네 가지 연결 경로</h3></div><span class="capability">역할별 독립 운영</span></div>
           <div class="topology-list">
-            <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>Web GPT</strong><small>ChatGPT Web만 추론</small></div>
+            <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>Web GPT</strong><small>추론은 ChatGPT Web · 로컬 실행은 Codex Native MCP 전용 Tunnel</small></div>
             <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>OCX 10100</strong><small>Web 외 모델만 전달</small></div>
             <div><span class="topology-source">codex-native 프로필</span><span class="topology-arrow">→</span><strong>OpenAI 네이티브</strong><small>브리지 장애 시 독립 복구 경로</small></div>
+            <div><span class="topology-source">외부 ChatGPT</span><span class="topology-arrow">→</span><span class="topology-port">Tunnel</span><span class="topology-arrow">→</span><strong>AICC Workspace</strong><small>별도 Tunnel · 등록 워크스페이스 13개 도구</small></div>
           </div>
         </article>
       </section>
