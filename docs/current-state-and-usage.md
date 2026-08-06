@@ -6,14 +6,15 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 
 ## 2026-08-06 검증 스냅샷
 
-- AICC 대시보드 `127.0.0.1:4381`: 10개 구성요소 중 9개 ready
+- AICC 대시보드 `127.0.0.1:4381`: 10개 구성요소 모두 ready
 - OCX `127.0.0.1:10100`: health 정상, 기존 Codex 작업 유지 중
 - AICC Workspace MCP: Git 워크스페이스 39개, Secure Tunnel healthy/ready
 - Business 앱 `AICC Workspace`: 13개 action으로 새로 고침 완료
 - 지침: AICC 정본과 Codex·Claude 배포본 일치, Codex agent는 `luna_worker` 1개
 - 브라우저: 기본 HTTP/HTTPS는 CDP Whale 9335, 브라우저 정책 20/20 통과
-- Web GPT 앱: v2 앱은 설치되어 있으나 전용 프로필의 Google 비밀번호 입력 전이라
-  17841 bridge와 Codex 모델 route는 아직 활성화되지 않음
+- Web GPT 앱: v2.0.0-aicc.1, 전용 프로필 로그인·High 동작 시험·17841 bridge와
+  Codex 모델 route 활성화 완료. 현재는 브라우저 전용 모드이며, 전체 Codex 도구
+  하네스용 별도 MCP Tunnel 연결은 아직 구성하지 않음
 
 실시간 상태는 다음 명령으로 다시 확인한다.
 
