@@ -102,6 +102,20 @@ function renderLiveMapState(id, ready, label, detail) {
   document.querySelectorAll(`[data-live-detail="${id}"]`).forEach(element => { element.textContent = detail; });
 }
 
+function compactNumber(value) {
+  if (!Number.isFinite(value)) return '–';
+  return new Intl.NumberFormat('ko-KR', { notation: 'compact', maximumFractionDigits: 1 }).format(value);
+}
+
+function formatBytes(value) {
+  if (!Number.isFinite(value)) return '–';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
+  return `${amount.toFixed(amount >= 100 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 function matchingTools(query) {
   const terms = String(query).trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   if (!terms.length) return [];
@@ -335,7 +349,7 @@ function renderStatus(data) {
   $('#webGptHarness').textContent = webGpt?.harnessReady ? '현재 프로젝트 도구 사용 가능' : webGpt?.harnessConfigured ? 'Tunnel 확인 필요' : '구성 전';
   $('#webGptTunnel').textContent = webGpt?.tunnelRuntime?.ready ? '준비됨' : webGpt?.tunnelRuntime?.running ? '연결 대기' : webGpt?.harnessConfigured ? '중지' : '미구성';
   $('#webGptConnector').textContent = webGpt?.connectorVerification === 'verified'
-    ? 'Codex Native 검증됨'
+    ? 'Web GPT 작업 하네스 검증됨'
     : webGpt?.connectorVerification === 'chatgpt-required' ? 'ChatGPT에서 1회 검증' : '하네스 준비 후 확인';
   $('#webGptTurns').textContent = Number.isInteger(webGpt?.activeBrowserTurns) ? `${webGpt.activeBrowserTurns}/${webGpt.maxConcurrentTurns}` : '–';
   const modelLabels = webGpt?.modelLabels || [];
@@ -363,6 +377,21 @@ function renderStatus(data) {
   $('#workspaceTools').innerHTML = tools.length ? tools.map(tool => `<div class="workspace-tool ${tool.mode === 'write' ? 'write' : 'read'}"><span>${tool.mode === 'write' ? '쓰기' : '읽기'}</span><div><strong>${escapeHtml(tool.title)}</strong><code>${escapeHtml(tool.name)}</code></div></div>`).join('') : '<span class="empty">게시할 로컬 도구 스냅샷이 없습니다.</span>';
   $('#ocxDetail').textContent = ocx?.detail || '상태를 확인할 수 없습니다.';
   $('#ocxIndicator').classList.toggle('online', ocx?.state === 'ready');
+  const ocxOverview = ocx?.overview || {};
+  $('#ocxConsoleIndicator').classList.toggle('online', ocx?.state === 'ready');
+  $('#ocxConsoleState').textContent = ocx?.state === 'ready' ? `OCX ${ocx.version || ''} 정상`.trim() : 'OCX 확인 필요';
+  $('#ocxConsoleDetail').textContent = ocx?.detail || '읽기 전용 운영 지표를 불러오지 못했습니다.';
+  $('#ocxProviderCount').textContent = Number.isInteger(ocxOverview.providerCount) ? `${ocxOverview.providerCount}개` : '–';
+  $('#ocxProviderNames').textContent = ocxOverview.providerNames?.length ? ocxOverview.providerNames.join(' · ') : 'Provider 미확인';
+  $('#ocxModelCount').textContent = Number.isInteger(ocxOverview.modelCount) ? `${ocxOverview.modelCount}개` : '–';
+  $('#ocxRequests30d').textContent = compactNumber(ocxOverview.requests30d);
+  $('#ocxCoverage').textContent = Number.isFinite(ocxOverview.usageCoverageRatio) ? `측정 ${Math.round(ocxOverview.usageCoverageRatio * 100)}%` : '측정 범위 미확인';
+  $('#ocxMemoryRss').textContent = formatBytes(ocxOverview.rssBytes);
+  $('#ocxMemoryBudget').textContent = Number.isFinite(ocxOverview.memoryBudgetBytes) ? `앱 보유 예산 ${formatBytes(ocxOverview.memoryBudgetBytes)}` : '예산 미확인';
+  $('#ocxRebootSafe').textContent = ocxOverview.rebootSafe === true ? '안전' : ocxOverview.rebootSafe === false ? '확인 필요' : '–';
+  $('#ocxStartupState').textContent = ocxOverview.startupStatus ? `시작 보호 ${ocxOverview.startupStatus}` : '시작 보호 미확인';
+  $('#ocxSubagentCount').textContent = Number.isInteger(ocxOverview.subagentCount) ? `${ocxOverview.subagentCount}개` : '–';
+  $('#ocxMultiAgentMode').textContent = ocxOverview.multiAgentMode ? `모드 ${ocxOverview.multiAgentMode}` : '모드 미확인';
   const ocxRunning = ocx?.state === 'ready';
   const ocxInstalled = ocx?.installed !== false;
   const startButton = $('[data-action="ocx.start"]');

@@ -173,10 +173,10 @@ export async function workspaceMcpStatus(options = {}) {
   let config;
   try { config = readWorkspaceMcpConfig(options); }
   catch (error) {
-    return { id: 'workspace-mcp', label: 'AICC Workspace MCP', state: 'attention', detail: error.message };
+    return { id: 'workspace-mcp', label: 'AICC 원격 작업공간 MCP', state: 'attention', detail: error.message };
   }
   if (!config) {
-    return { id: 'workspace-mcp', label: 'AICC Workspace MCP', state: 'unavailable', detail: '아직 구성되지 않았습니다.', optional: false };
+    return { id: 'workspace-mcp', label: 'AICC 원격 작업공간 MCP', state: 'unavailable', detail: '아직 구성되지 않았습니다.', optional: false };
   }
   const missing = config.workspaces.filter(item => !realDirectory(item.root));
   const command = workspaceMcpCommand(config, { ...options, configPath: paths.config });
@@ -191,7 +191,7 @@ export async function workspaceMcpStatus(options = {}) {
   const ready = missing.length === 0 && serverExists && dependencyCheck.status === 0 && tunnel.ready;
   return {
     id: 'workspace-mcp',
-    label: 'AICC Workspace MCP',
+    label: 'AICC 원격 작업공간 MCP',
     state: ready ? 'ready' : 'attention',
     detail: missing.length
       ? `등록 경로 ${missing.length}개를 찾지 못했습니다.`

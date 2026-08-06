@@ -4,13 +4,13 @@
     {"id":"web-desktop","type":"text","x":60,"y":90,"width":300,"height":130,"text":"# Codex Desktop\n문맥 · 승인 · 현재 프로젝트 도구","color":"4"},
     {"id":"web-bridge","type":"text","x":440,"y":90,"width":280,"height":130,"text":"# 17841 브리지\nWeb 모델 분기 · Web 외 모델은 OCX로 전달","color":"3"},
     {"id":"web-chatgpt","type":"text","x":800,"y":90,"width":300,"height":130,"text":"# ChatGPT Web\n유일한 추론 주체\n임시·저장 / 낮음~매우 높음","color":"6"},
-    {"id":"web-tunnel","type":"text","x":1180,"y":90,"width":340,"height":130,"text":"# Codex Native MCP Tunnel\n현재 Codex turn broker 전용","color":"3"},
+    {"id":"web-tunnel","type":"text","x":1180,"y":90,"width":340,"height":130,"text":"# Web GPT 작업 하네스 Tunnel\n현재 Codex turn broker 전용","color":"3"},
     {"id":"web-project","type":"text","x":1600,"y":90,"width":460,"height":130,"text":"# 현재 Codex 프로젝트\n파일 · 터미널 · 설치된 MCP · skills · Browser/Computer Use","color":"5"},
 
     {"id":"group-workspace","type":"group","x":0,"y":390,"width":2140,"height":330,"label":"02 외부 ChatGPT AICC Workspace","color":"5"},
     {"id":"workspace-chatgpt","type":"text","x":60,"y":480,"width":320,"height":130,"text":"# ChatGPT Business\n폰 · 다른 컴퓨터 · 웹\n현재 대화가 추론","color":"4"},
-    {"id":"workspace-tunnel","type":"text","x":500,"y":480,"width":360,"height":130,"text":"# AICC Workspace Tunnel\n외부 ChatGPT용 전용 연결","color":"3"},
-    {"id":"workspace-mcp","type":"text","x":980,"y":480,"width":360,"height":130,"text":"# AICC Workspace MCP\n13개 고정 도구 · 경로 검증 · seatbelt","color":"5"},
+    {"id":"workspace-tunnel","type":"text","x":500,"y":480,"width":360,"height":130,"text":"# AICC 원격 작업공간 Tunnel\n외부 ChatGPT용 전용 연결","color":"3"},
+    {"id":"workspace-mcp","type":"text","x":980,"y":480,"width":360,"height":130,"text":"# AICC 원격 작업공간 MCP\n13개 고정 도구 · 경로 검증 · seatbelt","color":"5"},
     {"id":"workspace-repos","type":"text","x":1460,"y":480,"width":540,"height":130,"text":"# 등록 Git 작업공간\nworkspace_id + 만료 lease\n임의 절대 경로와 workspace 탈출 차단","color":"5"},
 
     {"id":"group-routes","type":"group","x":0,"y":780,"width":2140,"height":330,"label":"03 독립 모델 경로","color":"2"},
@@ -20,7 +20,7 @@
     {"id":"native-profile","type":"text","x":1370,"y":870,"width":300,"height":120,"text":"# codex-native 프로필\n안전한 수동 복구 경로","color":"4"},
     {"id":"native-openai","type":"text","x":1770,"y":870,"width":300,"height":120,"text":"# OpenAI 공식 Codex\n브리지·OCX 우회","color":"6"},
 
-    {"id":"tunnel-note","type":"text","x":0,"y":1160,"width":2140,"height":160,"text":"# 두 Tunnel은 통합 관리하되 전송 경로는 분리\nCodex Native는 매 turn 달라지는 현재 Codex 도구를 중계하고, AICC Workspace는 외부 ChatGPT에 고정 도구를 게시합니다. 하나로 합치면 권한·수명주기·장애 범위가 섞입니다.","color":"3"},
+    {"id":"tunnel-note","type":"text","x":0,"y":1160,"width":2140,"height":160,"text":"# 두 MCP는 통합 관리하되 전송 경로는 분리\nWeb GPT 작업 하네스는 Codex가 시작한 매 turn의 동적 도구를 중계하고, AICC 원격 작업공간은 ChatGPT가 시작한 대화에 고정 도구를 게시합니다. 하나로 합치면 현재 프로젝트 권한과 원격 작업공간 권한이 섞입니다.","color":"3"},
 
     {"id":"group-lineage","type":"group","x":0,"y":1380,"width":2140,"height":650,"label":"04 원본 소스 계보","color":"6"},
     {"id":"source-webgpt","type":"link","x":60,"y":1480,"width":390,"height":150,"url":"https://github.com/miuuyy/codex-chatgpt-web"},
@@ -29,7 +29,7 @@
     {"id":"source-aicc","type":"link","x":1440,"y":1480,"width":390,"height":150,"url":"https://github.com/AgenticLab-SH/AICC"},
     {"id":"source-devspace","type":"link","x":290,"y":1740,"width":390,"height":150,"url":"https://github.com/Waishnav/devspace"},
     {"id":"source-jsoncanvas","type":"link","x":750,"y":1740,"width":390,"height":150,"url":"https://jsoncanvas.org/"},
-    {"id":"lineage-note","type":"text","x":1210,"y":1725,"width":740,"height":180,"text":"## 채택 수준\n- codex-chatgpt-web: fork, 업데이트 추적\n- OpenCodex: pinned submodule, 업데이트 추적\n- tunnel-client: pinned binary, 보안 업데이트 추적\n- AICC Workspace MCP: AICC 직접 구현\n- DevSpace: 아이디어만 참고, 자동 추적 안 함\n- JSON Canvas: 표현 규격만 참고","color":"5"}
+    {"id":"lineage-note","type":"text","x":1210,"y":1725,"width":740,"height":180,"text":"## 채택 수준\n- codex-chatgpt-web: fork, 업데이트 추적\n- OpenCodex: pinned submodule, 업데이트 추적\n- tunnel-client: pinned binary, 보안 업데이트 추적\n- AICC 원격 작업공간 MCP: AICC 직접 구현\n- DevSpace: 아이디어만 참고, 자동 추적 안 함\n- JSON Canvas: 표현 규격만 참고","color":"5"}
   ],
   "edges": [
     {"id":"e-web-1","fromNode":"web-desktop","fromSide":"right","toNode":"web-bridge","toSide":"left","toEnd":"arrow"},

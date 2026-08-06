@@ -52,6 +52,30 @@ test('OCX adapter combines installed version and health', async () => {
   assert.equal(status.runtime.port, 10100);
 });
 
+test('OCX adapter summarizes official read-only CLI data for the AICC dashboard', async () => {
+  const payloads = new Map([
+    ['--version', 'opencodex 2.10.0\n'],
+    ['health --json', JSON.stringify({ ok: true, pid: 42, port: 10100 })],
+    ['provider list --json', JSON.stringify({ configured: [{ name: 'openai', isDefault: true }, { name: 'kiro' }] })],
+    ['models list --json', JSON.stringify({ models: [{ model: 'one' }, { model: 'two' }, { model: 'three' }] })],
+    ['agent status --json', JSON.stringify({ v2: { multiAgentMode: 'default' }, subagents: { chosen: ['one'] } })],
+    ['system status --json', JSON.stringify({ startup: { status: 'protected', rebootSafe: true, serviceRunning: true }, memory: { uptimeSeconds: 90, rss: 1024, appOwnedBytes: { budgetBytes: 2048, retainedBytes: 512, observedInFlight: { translator_buffers: { active: 0 } } } } })],
+    ['observe usage --json', JSON.stringify({ summary: { requests: 12, totalTokens: 345, coverageRatio: 0.9 } })],
+    ['combo list --json', JSON.stringify({ combos: [{ id: 'fallback' }] })]
+  ]);
+  const status = await ocxStatus({
+    executable: 'ocx-fixture',
+    runCommand: async (_executable, args) => ({ ok: true, stdout: payloads.get(args.join(' ')) ?? '{}' })
+  });
+  assert.deepEqual(status.overview.providerNames, ['openai', 'kiro']);
+  assert.equal(status.overview.defaultProvider, 'openai');
+  assert.equal(status.overview.modelCount, 3);
+  assert.equal(status.overview.comboCount, 1);
+  assert.equal(status.overview.rebootSafe, true);
+  assert.equal(status.overview.requests30d, 12);
+  assert.equal(status.overview.subagentCount, 1);
+});
+
 test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex route', async t => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-web-gpt-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
@@ -105,7 +129,7 @@ test('Web GPT adapter reports attention when full harness tunnel is not ready', 
   const configPath = path.join(root, 'config.json');
   const codexConfigPath = path.join(root, 'codex.toml');
   fs.writeFileSync(configPath, JSON.stringify({
-    port: 17841, releaseVersion: '2.0.0', mode: 'full', tunnel: { configured: true }, appName: 'Codex Native'
+    port: 17841, releaseVersion: '2.0.0', mode: 'full', tunnel: { configured: true }, appName: 'Web GPT 작업 하네스'
   }));
   fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
   const status = await webGptStatus({

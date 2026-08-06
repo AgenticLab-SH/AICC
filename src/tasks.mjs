@@ -15,7 +15,7 @@ const definitions = Object.freeze({
   'setup.check': { title: '설치 상태 점검', run: () => setupEnvironment({ checkOnly: true }) },
   'cli.status': { title: 'CLI 연결 점검', run: () => cliToolStatus() },
   'agents.status': { title: 'Codex 하위 에이전트 상태', run: () => agentsStatus() },
-  'workspace.status': { title: 'AICC Workspace MCP 상태', run: () => workspaceMcpStatus() },
+  'workspace.status': { title: 'AICC 원격 작업공간 MCP 상태', run: () => workspaceMcpStatus() },
   'workspace.publish-preflight': {
     title: 'AICC Workspace 게시 사전검사',
     run: async () => {

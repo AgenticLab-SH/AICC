@@ -10,13 +10,13 @@ AI Control Center(AICC)는 GPT 계정, Codex/OCX 모델 경로, ChatGPT의 로�
 ```text
 Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델 추론)
                  |                         |
-                 |                         \-> Codex Native MCP 전용 Tunnel
+                 |                         \-> Web GPT 작업 하네스 전용 Tunnel
                  |                             -> 현재 Codex 작업의 도구 하네스
                  \-> OCX 10100 (Web 외 모델 전달)
 
 Native Codex profile -> OpenAI 공식 Codex 경로 (복구·독립 사용)
 
-외부 ChatGPT -> AICC Workspace 전용 Tunnel -> AICC Workspace MCP
+외부 ChatGPT -> AICC 원격 작업공간 전용 Tunnel -> AICC 원격 작업공간 MCP
                                              -> 등록 Git 워크스페이스
 ```
 
@@ -24,9 +24,9 @@ Codex Desktop에서는 `Web / 임시|저장 / 낮음~매우 높음` 모델을 �
 Web을 추론 백엔드로 쓸 수 있습니다. Web 모델의 추론은 OCX나 로컬 Codex 모델
 토큰을 사용하지 않습니다. 브라우저 전용 모드는 문맥·이미지만 전달하고, 별도 MCP
 설정을 마친 전체 하네스 모드에서만 현재 Codex 작업의 파일·터미널·승인·도구를
-사용합니다. 이 전용 Tunnel은 외부 ChatGPT용 `AICC Workspace MCP` Tunnel과 다른
+사용합니다. 이 전용 Tunnel은 외부 ChatGPT용 `AICC 원격 작업공간 MCP` Tunnel과 다른
 런타임입니다. 두 경로를 한 Tunnel ID로 재사용하지 않습니다. 외부 ChatGPT에서
-로컬을 편집하는 별도 경로는 `AICC Workspace MCP`가 담당하며 Codex 작업을
+로컬을 편집하는 별도 경로는 `AICC 원격 작업공간 MCP`가 담당하며 Codex 작업을
 생성하거나 OCX를 호출하지 않습니다.
 
 현재 검증 상태, 일상 사용법과 기존 질문의 최종 답은
@@ -117,7 +117,7 @@ Admin API key가 필요한 OpenAI Usage/Costs API의 영역이며 반영이 지�
 ## 포함 구성요소
 
 - Account Manager: `components/account-manager`
-- AICC Workspace MCP: `components/workspace-mcp`
+- AICC 원격 작업공간 MCP: `components/workspace-mcp`
 - Codex Web GPT 모델 브리지: 별도 `codex-chatgpt-web` 저장소와 설치 앱
 - OpenCodex(OCX): `vendor/opencodex` 고정 submodule
 - 브라우저·런처·운영 도구: `tools/platform`

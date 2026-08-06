@@ -14,11 +14,11 @@
       <nav>
         <a class="nav-link active" href="#home"><span aria-hidden="true">⌂</span>홈</a>
         <a class="nav-link" href="#tools"><span aria-hidden="true">⌕</span>모든 도구</a>
-        <a class="nav-link" href="#accounts"><span aria-hidden="true">◎</span>계정</a>
         <a class="nav-link" href="#architecture"><span aria-hidden="true">⌘</span>구조 지도</a>
         <a class="nav-link" href="#web-gpt"><span aria-hidden="true">W</span>Web GPT</a>
-        <a class="nav-link" href="#workspace"><span aria-hidden="true">M</span>Workspace</a>
-        <a class="nav-link" href="#controls"><span aria-hidden="true">◇</span>연결 제어</a>
+        <a class="nav-link" href="#workspace"><span aria-hidden="true">M</span>원격 작업</a>
+        <a class="nav-link" href="#ocx-console"><span aria-hidden="true">O</span>OCX</a>
+        <a class="nav-link" href="#accounts"><span aria-hidden="true">◎</span>계정</a>
         <a class="nav-link" href="#system"><span aria-hidden="true">◌</span>시스템</a>
       </nav>
       <div class="local-note"><span class="status-dot"></span><span><strong>대시보드는 로컬 전용</strong><small>외부 작업은 Secure Tunnel 사용</small></span></div>
@@ -46,9 +46,9 @@
       <section class="operations-overview" aria-labelledby="operationsTitle">
         <div class="section-title compact"><div><p class="eyebrow">LIVE ROUTES</p><h2 id="operationsTitle">현재 작업 경로</h2></div><span>각 경로의 추론·도구·연결 역할을 분리</span></div>
         <div class="route-grid">
-          <article class="route-card" data-route-card="web-gpt"><div><span class="route-badge web">W</span><span><strong>Web GPT</strong><small>ChatGPT Web 추론</small></span></div><b id="webGptRouteState">확인 중</b><p id="webGptRouteDetail">모델 브리지 상태를 읽고 있습니다.</p></article>
-          <article class="route-card" data-route-card="ocx"><div><span class="route-badge ocx">O</span><span><strong>OCX</strong><small>선택형 모델 라우팅</small></span></div><b id="ocxRouteState">확인 중</b><p id="ocxRouteDetail">OCX 상태를 읽고 있습니다.</p></article>
-          <article class="route-card" data-route-card="workspace"><div><span class="route-badge workspace">M</span><span><strong>AICC Workspace</strong><small>외부 ChatGPT ↔ 로컬 도구</small></span></div><b id="workspaceRouteState">확인 중</b><p id="workspaceRouteDetail">Secure Tunnel 상태를 읽고 있습니다.</p></article>
+          <article class="route-card" data-route-card="web-gpt"><div><span class="route-badge web">W</span><span><strong>Codex Web 모델</strong><small>Codex에서 시작 · ChatGPT Web 추론</small></span></div><b id="webGptRouteState">확인 중</b><p id="webGptRouteDetail">모델 브리지 상태를 읽고 있습니다.</p></article>
+          <article class="route-card" data-route-card="ocx"><div><span class="route-badge ocx">O</span><span><strong>OCX 모델 경로</strong><small>Codex에서 시작 · 선택 provider 추론</small></span></div><b id="ocxRouteState">확인 중</b><p id="ocxRouteDetail">OCX 상태를 읽고 있습니다.</p></article>
+          <article class="route-card" data-route-card="workspace"><div><span class="route-badge workspace">M</span><span><strong>원격 Workspace MCP</strong><small>ChatGPT에서 시작 · 등록 프로젝트 실행</small></span></div><b id="workspaceRouteState">확인 중</b><p id="workspaceRouteDetail">Secure Tunnel 상태를 읽고 있습니다.</p></article>
         </div>
       </section>
 
@@ -59,6 +59,20 @@
 
       <section id="architecture" class="anchor-section" aria-labelledby="architectureTitle">
         <div class="section-title"><div><p class="eyebrow">SYSTEM CANVAS</p><h2 id="architectureTitle">AICC 전체 구조 지도</h2></div><span>누가 추론하고 · 어디로 연결되고 · 무엇을 실행하는지</span></div>
+        <div class="mcp-choice-grid" aria-label="MCP 용도 비교">
+          <article class="mcp-choice web-choice">
+            <div class="choice-heading"><span>1</span><div><p class="eyebrow">CODEX에서 시작</p><h3>Web GPT 작업 하네스 MCP</h3></div></div>
+            <p>Codex Desktop에서 <strong>Web / 임시·저장 / 추론 수준</strong> 모델을 선택할 때 씁니다. ChatGPT Web이 추론하고, 현재 Codex 작업이 가진 파일·터미널·브라우저 도구를 호출합니다.</p>
+            <dl><div><dt>작업 범위</dt><dd>현재 Codex 프로젝트</dd></div><div><dt>도구 형태</dt><dd>매 turn 동적 하네스</dd></div><div><dt>현재 상태</dt><dd data-live-detail="web-harness">Full 하네스 확인 중</dd></div></dl>
+            <small class="legacy-name">이전 이름: Codex Native MCP · 네이티브 모델과 무관</small>
+          </article>
+          <article class="mcp-choice workspace-choice">
+            <div class="choice-heading"><span>2</span><div><p class="eyebrow">CHATGPT에서 시작</p><h3>AICC 원격 작업공간 MCP</h3></div></div>
+            <p>폰이나 웹 ChatGPT에서 이 Mac의 등록 프로젝트를 열 때 씁니다. 현재 ChatGPT 대화가 추론하고, 13개 고정 도구와 만료 lease로 허용된 작업공간만 다룹니다.</p>
+            <dl><div><dt>작업 범위</dt><dd>등록한 Git 작업공간</dd></div><div><dt>도구 형태</dt><dd>13개 고정 도구</dd></div><div><dt>현재 상태</dt><dd data-live-detail="workspace-tunnel">Tunnel 확인 중</dd></div></dl>
+            <small class="legacy-name">ChatGPT 앱 표시 이름: AICC Workspace</small>
+          </article>
+        </div>
         <article class="panel architecture-panel">
           <div class="canvas-toolbar">
             <div class="map-filters" role="group" aria-label="구조 지도 경로 필터">
@@ -78,7 +92,7 @@
                 <div class="map-node interface"><span>작업 화면</span><strong>Codex Desktop</strong><small>문맥 · 승인 · 도구 스키마</small></div><i aria-hidden="true">→</i>
                 <div class="map-node transport"><span>로컬 브리지</span><strong>17841</strong><small>Web 모델 분기</small></div><i aria-hidden="true">→</i>
                 <div class="map-node inference"><span>유일한 추론 주체</span><strong>ChatGPT Web</strong><small>임시·저장 / 낮음~매우 높음</small></div><i aria-hidden="true">→</i>
-                <div class="map-node transport"><span>전용 Secure Tunnel</span><strong>Codex Native MCP Tunnel</strong><small data-live-detail="web-harness">Full 하네스 상태 확인 중</small></div><i aria-hidden="true">→</i>
+                <div class="map-node transport"><span>전용 Secure Tunnel</span><strong>Web GPT 작업 하네스 Tunnel</strong><small data-live-detail="web-harness">Full 하네스 상태 확인 중</small></div><i aria-hidden="true">→</i>
                 <div class="map-node execution"><span>실행 경계</span><strong>현재 Codex 프로젝트</strong><small>파일 · 터미널 · 설치된 도구</small></div>
               </div>
             </article>
@@ -88,8 +102,8 @@
               <div class="flow-track">
                 <div class="map-node interface"><span>외부 화면</span><strong>ChatGPT Business</strong><small>폰 · 다른 컴퓨터 · 웹</small></div><i aria-hidden="true">→</i>
                 <div class="map-node inference"><span>유일한 추론 주체</span><strong>현재 ChatGPT 대화</strong><small>Codex·OCX 모델 불사용</small></div><i aria-hidden="true">→</i>
-                <div class="map-node transport"><span>전용 Secure Tunnel</span><strong>AICC Workspace Tunnel</strong><small data-live-detail="workspace-tunnel">Tunnel 상태 확인 중</small></div><i aria-hidden="true">→</i>
-                <div class="map-node execution"><span>고정 MCP 서버</span><strong>Workspace MCP</strong><small>13개 경계 도구</small></div><i aria-hidden="true">→</i>
+                <div class="map-node transport"><span>전용 Secure Tunnel</span><strong>AICC 원격 작업공간 Tunnel</strong><small data-live-detail="workspace-tunnel">Tunnel 상태 확인 중</small></div><i aria-hidden="true">→</i>
+                <div class="map-node execution"><span>고정 MCP 서버</span><strong>AICC 원격 작업공간 MCP</strong><small>13개 경계 도구</small></div><i aria-hidden="true">→</i>
                 <div class="map-node execution"><span>실행 경계</span><strong>등록 Git 작업공간</strong><small>workspace_id + 만료 lease</small></div>
               </div>
             </article>
@@ -104,21 +118,21 @@
           </div>
 
           <div class="tunnel-decision" data-map-groups="web workspace">
-            <span class="decision-mark">≠</span><div><strong>두 Tunnel은 운영 화면에서 함께 관리하되 전송 경로는 분리합니다.</strong><p>Codex Native는 매 turn 달라지는 현재 Codex 도구를 중계하고, AICC Workspace는 외부 ChatGPT에 13개 고정 도구를 게시합니다. 하나로 합치면 권한·수명주기·장애 범위가 섞이므로 보안과 복구성이 나빠집니다.</p></div>
+            <span class="decision-mark">≠</span><div><strong>두 MCP는 AICC에서 함께 관리하지만, 시작점과 권한 경계가 달라 전송 경로는 분리합니다.</strong><p>Web GPT 작업 하네스는 Codex가 시작한 매 turn의 동적 도구를 중계하고, AICC 원격 작업공간은 ChatGPT가 시작한 대화에 13개 고정 도구를 게시합니다. 하나로 합치면 현재 프로젝트 권한과 원격 등록 작업공간 권한이 섞입니다.</p></div>
             <a class="button-link secondary" href="/aicc-architecture.canvas" download>Obsidian Canvas 받기</a>
           </div>
         </article>
 
         <article class="panel lineage-panel" data-map-groups="sources" aria-labelledby="lineageTitle">
           <div class="panel-title"><div><p class="eyebrow">SOURCE LINEAGE</p><h3 id="lineageTitle">어떤 원본이 어디에 반영됐나</h3></div><span class="capability">코드 채택과 아이디어 참고를 구분</span></div>
-          <div class="lineage-grid">
-            <a class="lineage-card active-source" href="https://github.com/miuuyy/codex-chatgpt-web" target="_blank" rel="noopener"><span>FORK · 업데이트 추적</span><strong>codex-chatgpt-web</strong><p>ChatGPT 웹 자동화와 Responses 브리지의 원형. AICC fork에서 17841, 한국어 모델명, launcher·복구·Full MCP를 확장합니다.</p><small>→ Codex Web GPT 앱</small></a>
-            <a class="lineage-card active-source" href="https://github.com/lidge-jun/opencodex" target="_blank" rel="noopener"><span>PINNED SUBMODULE · 업데이트 추적</span><strong>OpenCodex</strong><p>OCX 10100 provider 라우팅의 원본. AICC는 고정 커밋을 검증한 뒤 별도 adapter로 운영합니다.</p><small>→ OCX 모델 경로</small></a>
-            <a class="lineage-card active-source" href="https://github.com/openai/tunnel-client" target="_blank" rel="noopener"><span>PINNED BINARY · 보안 업데이트 추적</span><strong>OpenAI Secure MCP Tunnel</strong><p>방화벽 뒤 로컬 MCP에 나가는 HTTPS 경로를 제공합니다. 역할별 profile과 key는 private runtime에 둡니다.</p><small>→ 두 개의 전용 Tunnel</small></a>
-            <a class="lineage-card owned-source" href="https://github.com/AgenticLab-SH/AICC" target="_blank" rel="noopener"><span>AICC 소유 구현</span><strong>AICC Workspace MCP</strong><p>작업공간 registry, lease, 경로 검증, seatbelt, 13개 도구와 대시보드는 AICC가 직접 구현·유지합니다.</p><small>→ 외부 ChatGPT 로컬 작업</small></a>
-            <a class="lineage-card reference-source" href="https://github.com/Waishnav/devspace" target="_blank" rel="noopener"><span>아이디어만 참고 · 자동 추적 안 함</span><strong>Waishnav/devspace</strong><p>범용 workspace 제어 방향을 비교했습니다. 코드·패키지·프로세스는 채택하지 않았고 필요한 경계는 AICC가 다시 구현했습니다.</p><small>→ 런타임 의존성 없음</small></a>
-            <a class="lineage-card reference-source" href="https://jsoncanvas.org/" target="_blank" rel="noopener"><span>표현 규격 참고 · 런타임 의존성 없음</span><strong>Obsidian JSON Canvas</strong><p>카드·그룹·연결선 방식과 공개 .canvas 규격을 구조 지도에 활용했습니다. Obsidian이나 커뮤니티 플러그인 설치는 필요 없습니다.</p><small>→ 이 구조 지도와 Canvas 내보내기</small></a>
-          </div>
+          <div class="lineage-table-wrap"><table class="lineage-table"><thead><tr><th>원본</th><th>채택 방식</th><th>AICC에 융합된 결과</th><th>업데이트 정책</th></tr></thead><tbody>
+            <tr><td><a href="https://github.com/miuuyy/codex-chatgpt-web" target="_blank" rel="noopener">codex-chatgpt-web</a></td><td><span class="source-tag fork">Fork</span></td><td>ChatGPT 웹 자동화 + Responses 브리지 → 17841, 한국어 모델명, 복구, Full 하네스 확장</td><td>원본 릴리스 비교 후 AICC fork에 선택 반영</td></tr>
+            <tr><td><a href="https://github.com/lidge-jun/opencodex" target="_blank" rel="noopener">OpenCodex</a></td><td><span class="source-tag pinned">Pinned submodule</span></td><td>10100 provider 라우팅 → AICC 상태·계정·운영 요약과 안전 제어</td><td>고정 커밋 검증 후 갱신</td></tr>
+            <tr><td><a href="https://github.com/openai/tunnel-client" target="_blank" rel="noopener">Secure MCP Tunnel</a></td><td><span class="source-tag binary">Pinned binary</span></td><td>방화벽 뒤 로컬 MCP의 outbound HTTPS 연결 → 역할별 두 Tunnel</td><td>보안 릴리스 우선 검증</td></tr>
+            <tr><td><a href="https://github.com/AgenticLab-SH/AICC" target="_blank" rel="noopener">AICC 자체 구현</a></td><td><span class="source-tag owned">Owned</span></td><td>원격 작업공간 registry·lease·seatbelt·13개 도구·통합 대시보드</td><td>AICC 테스트와 공개 안전성 CI로 유지</td></tr>
+            <tr><td><a href="https://github.com/Waishnav/devspace" target="_blank" rel="noopener">Waishnav/devspace</a></td><td><span class="source-tag reference">Reference</span></td><td>범용 workspace UX·경계 아이디어만 비교, 실행 코드와 프로세스는 미채택</td><td>자동 추적 안 함 · 새 아이디어 조사 때만 재검토</td></tr>
+            <tr><td><a href="https://jsoncanvas.org/" target="_blank" rel="noopener">Obsidian JSON Canvas</a></td><td><span class="source-tag reference">Format</span></td><td>카드·그룹·연결선 표현과 공개 .canvas 내보내기</td><td>런타임 의존성 없음</td></tr>
+          </tbody></table></div>
           <p class="panel-footnote lineage-note">업데이트를 계속 추적하는 대상은 실제 실행 코드인 codex-chatgpt-web, OpenCodex, tunnel-client와 MCP SDK입니다. DevSpace와 시각화 참고 소스는 보안·기능 의존성이 없으므로 자동 업데이트 대상이 아닙니다.</p>
         </article>
       </section>
@@ -154,19 +168,29 @@
         <article class="panel route-topology" aria-labelledby="routeTopologyTitle">
           <div class="panel-title"><div><p class="eyebrow">ROUTING MAP</p><h3 id="routeTopologyTitle">서로 분리된 네 가지 연결 경로</h3></div><span class="capability">역할별 독립 운영</span></div>
           <div class="topology-list">
-            <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>Web GPT</strong><small>추론은 ChatGPT Web · 로컬 실행은 Codex Native MCP 전용 Tunnel</small></div>
+            <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>Web GPT</strong><small>추론은 ChatGPT Web · 로컬 실행은 Web GPT 작업 하네스 MCP</small></div>
             <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>OCX 10100</strong><small>Web 외 모델만 전달</small></div>
             <div><span class="topology-source">codex-native 프로필</span><span class="topology-arrow">→</span><strong>OpenAI 네이티브</strong><small>브리지 장애 시 독립 복구 경로</small></div>
-            <div><span class="topology-source">외부 ChatGPT</span><span class="topology-arrow">→</span><span class="topology-port">Tunnel</span><span class="topology-arrow">→</span><strong>AICC Workspace</strong><small>별도 Tunnel · 등록 워크스페이스 13개 도구</small></div>
+            <div><span class="topology-source">외부 ChatGPT</span><span class="topology-arrow">→</span><span class="topology-port">Tunnel</span><span class="topology-arrow">→</span><strong>AICC 원격 작업공간</strong><small>별도 Tunnel · 등록 워크스페이스 13개 도구</small></div>
           </div>
+        </article>
+        <article class="panel web-test-panel" aria-labelledby="webTestTitle">
+          <div class="panel-title"><div><p class="eyebrow">VERIFICATION EVIDENCE · 2026-08-06</p><h3 id="webTestTitle">비-Pro 8개 모델 추론 시험</h3></div><span class="capability attention">로컬 편집은 아직 미검증</span></div>
+          <div class="test-contract"><strong>공통 조건</strong><span>모든 모델에 같은 최소 프롬프트와 “정상만 출력” 응답 계약을 사용한 새 ephemeral Codex turn</span><span>Pro 미사용 · 도구 호출 없음 · 브라우저 전용 모드</span></div>
+          <div class="web-test-grid" role="table" aria-label="Web GPT 모델별 소요시간">
+            <div class="test-row test-head" role="row"><span role="columnheader">대화</span><span role="columnheader">낮음</span><span role="columnheader">중간</span><span role="columnheader">높음</span><span role="columnheader">매우 높음</span></div>
+            <div class="test-row" role="row"><strong role="rowheader">임시</strong><span>25.28초</span><span>25.27초</span><span>25.38초</span><span>25.38초</span></div>
+            <div class="test-row" role="row"><strong role="rowheader">저장</strong><span>28.93초</span><span>15.69초</span><span>28.86초</span><span>25.39초</span></div>
+          </div>
+          <div class="test-verdicts"><p><span class="verdict-dot pass"></span><strong>추론 8/8 성공</strong><small>각 turn이 정확히 `정상`으로 종료</small></p><p><span class="verdict-dot pending"></span><strong>로컬 편집 보류</strong><small>Full 하네스 + ChatGPT 커넥터 뒤 재시험</small></p></div>
         </article>
       </section>
 
       <section id="workspace" class="anchor-section" aria-labelledby="workspaceTitle">
-        <div class="section-title"><div><p class="eyebrow">REMOTE LOCAL WORKSPACE</p><h2 id="workspaceTitle">AICC Workspace 운영</h2></div><span>ChatGPT Business에서 이 Mac의 등록 프로젝트 사용</span></div>
+        <div class="section-title"><div><p class="eyebrow">REMOTE LOCAL WORKSPACE</p><h2 id="workspaceTitle">AICC 원격 작업공간 MCP</h2></div><span>ChatGPT Business에서 이 Mac의 등록 프로젝트 사용</span></div>
         <div class="workspace-layout">
           <article class="panel workspace-runtime">
-            <div class="web-gpt-heading"><span id="workspaceIndicator" class="large-status offline"></span><div><h3>Secure MCP Tunnel</h3><p id="workspaceDetail">AICC Workspace 상태 확인 중</p></div></div>
+            <div class="web-gpt-heading"><span id="workspaceIndicator" class="large-status offline"></span><div><h3>AICC 원격 작업공간 Tunnel</h3><p id="workspaceDetail">원격 작업공간 상태 확인 중</p></div></div>
             <dl class="metric-list">
               <div><dt>등록 프로젝트</dt><dd id="workspaceCount">–</dd></div>
               <div><dt>터널</dt><dd id="workspaceTunnel">–</dd></div>
@@ -192,6 +216,31 @@
           <div id="workspaceTools" class="workspace-tool-grid"><span class="empty">상태를 확인하고 있습니다.</span></div>
           <p class="panel-footnote">모든 파일·명령 작업은 먼저 연 워크스페이스 경계 안에서만 수행됩니다. 임의의 로컬 절대 경로는 열 수 없습니다.</p>
         </article>
+      </section>
+
+      <section id="ocx-console" class="anchor-section" aria-labelledby="ocxConsoleTitle">
+        <div class="section-title"><div><p class="eyebrow">OCX OPERATIONS</p><h2 id="ocxConsoleTitle">OCX 운영 센터</h2></div><span>핵심 상태는 AICC에서 · 전문 설정은 OCX 원본 화면에서</span></div>
+        <div class="ocx-hero panel">
+          <div class="ocx-health-copy"><div class="web-gpt-heading"><span id="ocxConsoleIndicator" class="large-status offline"></span><div><h3 id="ocxConsoleState">OCX 상태 확인 중</h3><p id="ocxConsoleDetail">읽기 전용 운영 지표를 불러오고 있습니다.</p></div></div><p class="panel-footnote">AICC는 OCX 자격증명을 복제하지 않습니다. OCX 공식 CLI의 안전한 JSON 요약만 표시하고, 설정 변경은 원본 콘솔로 연결합니다.</p></div>
+          <div class="ocx-kpi-grid" aria-label="OCX 핵심 지표">
+            <div><span>Provider</span><strong id="ocxProviderCount">–</strong><small id="ocxProviderNames">확인 중</small></div>
+            <div><span>노출 모델</span><strong id="ocxModelCount">–</strong><small>현재 catalog</small></div>
+            <div><span>30일 요청</span><strong id="ocxRequests30d">–</strong><small id="ocxCoverage">측정 범위 확인 중</small></div>
+            <div><span>메모리 RSS</span><strong id="ocxMemoryRss">–</strong><small id="ocxMemoryBudget">예산 확인 중</small></div>
+            <div><span>재부팅 안전</span><strong id="ocxRebootSafe">–</strong><small id="ocxStartupState">시작 보호 확인 중</small></div>
+            <div><span>하위 모델</span><strong id="ocxSubagentCount">–</strong><small id="ocxMultiAgentMode">모드 확인 중</small></div>
+          </div>
+        </div>
+        <div class="ocx-module-grid" aria-label="OCX 기능 바로가기">
+          <a href="http://127.0.0.1:10100/#dashboard" target="_blank" rel="noopener"><span>01</span><strong>대시보드</strong><small>상태·가동시간·provider·메모리</small></a>
+          <a href="http://127.0.0.1:10100/#startup" target="_blank" rel="noopener"><span>02</span><strong>시작 보호</strong><small>로그인 자동 실행·복구 안전성</small></a>
+          <a href="http://127.0.0.1:10100/#providers" target="_blank" rel="noopener"><span>03</span><strong>Provider</strong><small>연결·OAuth·기본 provider</small></a>
+          <a href="http://127.0.0.1:10100/#models" target="_blank" rel="noopener"><span>04</span><strong>모델</strong><small>표시·context·custom model</small></a>
+          <a href="http://127.0.0.1:10100/#combos" target="_blank" rel="noopener"><span>05</span><strong>Combo</strong><small>failover·round-robin</small></a>
+          <a href="http://127.0.0.1:10100/#subagents" target="_blank" rel="noopener"><span>06</span><strong>하위 에이전트</strong><small>모델·effort·sidecar</small></a>
+          <a href="http://127.0.0.1:10100/#logs" target="_blank" rel="noopener"><span>07</span><strong>로그·디버그</strong><small>요청·provider·injection</small></a>
+          <a href="http://127.0.0.1:10100/#usage" target="_blank" rel="noopener"><span>08</span><strong>사용량·저장소</strong><small>토큰·coverage·정리 정책</small></a>
+        </div>
       </section>
 
       <section id="accounts" class="anchor-section" aria-labelledby="accountsTitle">

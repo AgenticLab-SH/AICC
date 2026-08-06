@@ -129,7 +129,7 @@ async function main() {
     if (current?.mode !== 'full') {
       run(cli, [
         'setup', '--full', '--tunnel-id', tunnelId, '--runtime-key-file', runtimeKeyFile,
-        '--browser-host-descriptor', browserDescriptor, '--app-name', 'Codex Native',
+        '--browser-host-descriptor', browserDescriptor, '--app-name', 'Web GPT 작업 하네스',
         '--port', String(stagingPort), '--preserve-codex-route', '--acknowledge-unofficial'
       ]);
       terminate(originalPid);

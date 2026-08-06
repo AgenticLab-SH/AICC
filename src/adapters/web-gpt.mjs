@@ -110,7 +110,7 @@ export async function webGptStatus(options = {}) {
     tunnelRuntime,
     connectorVerified,
     connectorVerification: connectorVerified ? 'verified' : harnessReady ? 'chatgpt-required' : 'not-ready',
-    connectorName: harnessConfigured ? config?.appName ?? 'Codex Native' : null,
+    connectorName: harnessConfigured ? config?.appName ?? 'Web GPT 작업 하네스' : null,
     harnessScope: 'current-codex-project',
     proAvailable,
     autoApproveToolCalls: config?.autoApproveToolCalls === true,
