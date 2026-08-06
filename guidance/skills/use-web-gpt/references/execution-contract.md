@@ -21,11 +21,11 @@
 새 대화는 내장 Browser에서 만든다. Web ChatGPT를 Codex Desktop 모델 provider로
 변환하는 DOM/Responses 브리지는 사용하지 않는다.
 
-로컬 프로젝트를 읽거나 수정해야 하면 ChatGPT Business의 `AICC Workspace MCP`
+로컬 프로젝트를 읽거나 수정해야 하면 ChatGPT Business의 `AICC 원격 작업공간 MCP`
 앱을 선택한다. 도구는 다음 경로로 실행된다.
 
 ```text
-ChatGPT Web -> OpenAI Secure MCP Tunnel -> AICC Workspace MCP -> 등록 워크스페이스
+ChatGPT Web -> OpenAI Secure MCP Tunnel -> AICC 원격 작업공간 MCP -> 등록 워크스페이스
 ```
 
 먼저 `aicc_workspace_list`, `aicc_workspace_open`을 사용하고 반환된 lease를 후속

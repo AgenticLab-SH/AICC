@@ -3,13 +3,13 @@
 ```text
 Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델 추론)
                  |                         |
-                 |                         \-> Codex Native MCP 전용 Tunnel
+                 |                         \-> Web GPT 작업 하네스 전용 Tunnel
                  |                             -> 현재 Codex 작업의 광고된 도구
                  \-> OCX 10100 (Web 외 모델)
 
 Native Codex profile -> OpenAI 공식 Codex endpoint
 
-외부 ChatGPT -> AICC Workspace 전용 Tunnel -> AICC Workspace MCP (STDIO)
+외부 ChatGPT -> AICC 원격 작업공간 전용 Tunnel -> AICC 원격 작업공간 MCP (STDIO)
                                              -> 별칭으로 등록된 Git workspace
 ```
 
@@ -20,7 +20,7 @@ OCX upstream으로 전달한다. 다만 Codex Desktop은 한 번에 하나의 �
 사용하므로, 17841이 선택된 profile에서 브리지가 중지되면 모델 선택기 전체가
 영향받을 수 있다. Native/OCX profile 전환은 실행 중 작업이 없는 시점에 한다.
 
-Codex Native MCP 전용 Tunnel과 AICC Workspace 전용 Tunnel은 이름만 다른 동일
+Web GPT 작업 하네스 전용 Tunnel과 AICC 원격 작업공간 전용 Tunnel은 이름만 다른 동일
 런타임이 아니다. 전자는 `codex-chatgpt-web mcp`를 실행해 현재 Codex turn broker에
 연결하고, 후자는 AICC의 고정 `components/workspace-mcp/server.mjs`를 실행한다.
 명령·수명주기·복구 책임이 다르므로 Tunnel ID와 profile을 공유하지 않는다.
@@ -29,7 +29,7 @@ Tunnel은 분리한다. 하나의 범용 MCP가 두 역할을 multiplex하는 �
 가능하더라도, 외부 ChatGPT 고정 권한과 현재 Codex turn의 동적 권한을 같은 장애·
 승인 경계에 놓게 되므로 채택하지 않는다.
 
-Workspace MCP는 고정 도구만 게시한다. 파일과 명령은 `workspace_id + lease`로
+AICC 원격 작업공간 MCP는 고정 도구만 게시한다. 파일과 명령은 `workspace_id + lease`로
 하나의 등록 workspace에 묶이고, 경로·심볼릭 링크·민감 파일을 검사한다. 명령은
 macOS seatbelt에서 실행하며 home의 다른 경로를 읽지 못하고 선택 workspace와
 private runtime 경로에만 쓸 수 있다. 브라우저와 Computer Use는 이 MCP에 넣지
@@ -69,6 +69,17 @@ LaunchAgent는 `~/.ai-control-center` 및 사용자 LaunchAgents에 둔다. macO
 플러그인이 필요 없다. 같은 내용을 `public/aicc-architecture.canvas`로 제공해
 Obsidian 내장 Canvas에서도 열 수 있다. Excalidraw와 Dataview는 각각 자유형 시각화와
 Markdown 질의에는 유용하지만 AICC 실시간 상태판의 런타임 의존성으로 채택하지 않는다.
+
+## 사용자에게 보이는 두 MCP 이름
+
+| 표시 이름 | 어디서 시작하는가 | 범위 | 이전 이름 또는 실제 앱 이름 |
+|---|---|---|---|
+| Web GPT 작업 하네스 MCP | Codex Desktop에서 Web 모델을 선택 | 현재 Codex 작업의 동적 도구 | 이전 `Codex Native MCP`; 네이티브 Codex 모델과 무관 |
+| AICC 원격 작업공간 MCP | 폰·웹 ChatGPT에서 앱을 선택 | 등록 Git 작업공간과 13개 고정 도구 | 현재 ChatGPT 앱 이름 `AICC Workspace` |
+
+둘은 모델이 아니다. 전자는 Codex에서 시작된 Web GPT turn이 현재 Codex 도구를 다시
+호출하는 경로이고, 후자는 ChatGPT에서 시작된 대화가 독립적으로 등록 작업공간을
+호출하는 경로다. 운영 상태는 AICC 한 화면에서 보되 Tunnel ID와 권한은 공유하지 않는다.
 
 구형 v1 브리지 설정, 과거 에이전트 스택, 폐기 provider·port·스킬은 복구 대상으로
 취급하지 않는다. 현재 v2 Web GPT 앱, 17841 bridge와 3경로 복구 문서만 유지한다.

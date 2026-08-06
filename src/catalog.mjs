@@ -90,7 +90,7 @@ const items = Object.freeze([
     webSection: 'controls', keywords: ['ocx', 'stop', '중지', '연결']
   },
   {
-    id: 'workspace-mcp', group: 'workflows', title: 'ChatGPT 로컬 작업공간',
+    id: 'workspace-mcp', group: 'workflows', title: 'AICC 원격 작업공간 MCP',
     description: 'Secure MCP Tunnel로 외부 ChatGPT에서 등록 프로젝트의 파일, 명령과 AICC 스킬을 직접 사용합니다.',
     command: 'aicc workspace status', mode: 'command', taskId: 'workspace.status', featured: true,
     keywords: ['chatgpt', 'mcp', 'workspace', 'secure tunnel', '로컬', '작업공간']
