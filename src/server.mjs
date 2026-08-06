@@ -6,6 +6,7 @@ import { ActionError, createActionController } from './actions.mjs';
 import { openLocalApp } from './apps.mjs';
 import { toolCatalog } from './catalog.mjs';
 import { collectStatus } from './status.mjs';
+import { openaiUsageStatus } from './openai-usage.mjs';
 import { runTask } from './tasks.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -126,6 +127,10 @@ export function createServer(options = {}) {
     }
     if (req.method === 'GET' && url.pathname === '/api/actions') {
       return json(res, 200, { ok: true, actions: actionController.list() });
+    }
+    if (req.method === 'GET' && url.pathname === '/api/openai-usage') {
+      try { return json(res, 200, await (options.openaiUsageStatus ?? openaiUsageStatus)()); }
+      catch (error) { return json(res, 500, { ok: false, error: error.message }); }
     }
     if (req.method === 'POST' && url.pathname === '/api/tasks/run') {
       if (!requestAllowed(req, res)) return;

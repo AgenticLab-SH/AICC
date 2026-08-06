@@ -11,6 +11,7 @@ import { setupEnvironment } from './setup.mjs';
 import { runGuidance } from './guidance.mjs';
 import { runTui } from './tui.mjs';
 import { runTask } from './tasks.mjs';
+import { guardedOpenaiResponse, openaiUsageStatus } from './openai-usage.mjs';
 import { checkAgents, deployAgents, planAgents, agentsStatus } from './agents.mjs';
 import { configureWorkspaceMcp, workspaceMcpCommand, workspaceMcpStatus, readWorkspaceMcpConfig, workspaceMcpPaths } from './workspace-mcp.mjs';
 
@@ -49,6 +50,10 @@ Usage:
   aicc cli status       codex·claude·OCX CLI 연결 상태 확인
   aicc cli setup [--install-missing]
                        고정 버전 CLI 설치와 OCX 연결 설정
+  aicc openai usage [--json]
+                       무료 토큰 로컬 원장과 95% 하드 한도 확인
+  printf '질문' | aicc openai ask --model gpt-5.4-mini --max-output 512
+                       Keychain 키로 무료 대상 모델만 guard를 거쳐 호출
   aicc action list      허용된 제어 작업 조회
   aicc action preview <작업> [--selector <계정>]
                        변경 내용 미리보기와 확인 토큰 발급
@@ -348,6 +353,35 @@ async function main() {
     printCliStatus(result);
     if (!result.ok) process.exitCode = 1;
     return;
+  }
+  if (command === 'openai') {
+    const subcommand = process.argv[3] || 'usage';
+    if (subcommand === 'usage') {
+      const result = openaiUsageStatus();
+      if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+      else {
+        console.log(`OpenAI 무료 토큰 로컬 guard · UTC ${result.dayUtc} · ${result.keyConfigured ? 'Keychain 키 확인됨' : '키 없음'}`);
+        for (const group of result.groups) console.log(`${group.label}: ${group.tokens.toLocaleString()} / ${group.freeLimit.toLocaleString()} token (${group.percent}%, 95% 하드 잔여 ${group.hardRemaining.toLocaleString()})`);
+        console.log(result.note);
+      }
+      return;
+    }
+    if (subcommand === 'ask') {
+      if (process.stdin.isTTY) throw new Error('입력 내용 노출을 줄이기 위해 stdin으로 프롬프트를 전달하세요.');
+      const chunks = [];
+      for await (const chunk of process.stdin) chunks.push(chunk);
+      const input = Buffer.concat(chunks).toString('utf8');
+      const model = optionValue('--model') || 'gpt-5.4-mini';
+      const maxOutputTokens = Number(optionValue('--max-output') || 512);
+      const result = await guardedOpenaiResponse({ model, input, maxOutputTokens });
+      if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+      else {
+        console.log(result.text);
+        console.error(`\n[AICC guard] ${result.model} · ${result.usage.totalTokens.toLocaleString()} token`);
+      }
+      return;
+    }
+    throw new Error(`알 수 없는 openai 명령: ${subcommand}`);
   }
   if (command === 'action') {
     const controller = createActionController();

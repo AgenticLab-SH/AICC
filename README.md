@@ -72,6 +72,7 @@ aicc web-gpt doctor --json   # Codex Web GPT 자체 진단
 aicc web-gpt open-connectors # ChatGPT 커넥터 설정 열기
 aicc guidance check          # 지침·스킬 정합성
 aicc action list             # 확인 가능한 변경 작업
+aicc openai usage            # 로컬 무료 토큰 guard 원장
 ```
 
 `cm`은 기존 자동화용 `aicc account` 호환 별칭입니다.
@@ -87,6 +88,19 @@ aicc action execute --confirmation '<확인 토큰>'
 활성 Codex 작업 중에는 `ocx restore`, `ocx restore back`, `ocx stop`, OCX 재시작,
 `sync --restart-codex`를 실행하지 않습니다. Native 복구와 OCX 복귀 절차는
 `manage-codex-model-routes` 스킬이 담당합니다.
+
+OpenAI API 공유 인센티브를 사용할 때는 프롬프트를 명령행 인자로 남기지 않고 stdin으로
+전달합니다. AICC는 현재 공식 무료 대상 모델만 허용하고 각 UTC 일일 풀의 95%에서
+로컬 요청을 차단합니다.
+
+```bash
+printf '짧게 답해줘' | aicc openai ask --model gpt-5.4-mini --max-output 256
+```
+
+이 원장은 AICC를 통과한 요청만 즉시 집계합니다. 조직 전체의 권위 있는 사용량과 비용은
+Admin API key가 필요한 OpenAI Usage/Costs API의 영역이며 반영이 지연될 수 있습니다.
+설정·민감정보 경계와 모델별 표시 방식은
+[OpenAI 무료 토큰 guard](docs/openai-complimentary-guard.md)를 참고하십시오.
 
 ## 상태 위치
 

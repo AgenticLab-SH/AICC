@@ -34,6 +34,10 @@ const searchResults = $('#searchResults');
 const quickTools = $('#quickTools');
 const toolFilters = $('#toolFilters');
 const toolLibrary = $('#toolLibrary');
+const openaiUsageGroups = $('#openaiUsageGroups');
+const openaiUsageUpdated = $('#openaiUsageUpdated');
+const openaiKeyState = $('#openaiKeyState');
+const openaiGuardSummary = $('#openaiGuardSummary');
 let confirmationToken = null;
 let catalog = { groups: [], items: [] };
 let statusData = null;
@@ -376,6 +380,36 @@ function renderStatus(data) {
   roots.innerHTML = data.stateRoots.map(item => `<div class="path"><code>${escapeHtml(item.path)}</code><span>${item.exists ? '유지 중' : '아직 없음'}</span></div>`).join('');
 }
 
+function formatTokens(value) {
+  return Number(value || 0).toLocaleString('ko-KR');
+}
+
+function renderOpenaiUsage(data) {
+  openaiKeyState.classList.toggle('online', data.keyConfigured);
+  openaiGuardSummary.textContent = data.keyConfigured
+    ? `Keychain 키 확인됨 · 유료 대상 모델 차단 · 무료 풀 95%에서 하드 정지`
+    : 'Keychain에서 OpenAI API 키를 찾지 못했습니다.';
+  openaiUsageUpdated.textContent = data.updatedAt
+    ? `즉시 원장 ${new Date(data.updatedAt).toLocaleString('ko-KR')}`
+    : `UTC ${data.dayUtc} · 아직 guard 호출 없음`;
+  openaiUsageGroups.innerHTML = data.groups.map(group => `
+    <article class="usage-group-card">
+      <div class="usage-group-head"><div><h3>${escapeHtml(group.label)}</h3><p>${formatTokens(group.tokens)} / ${formatTokens(group.freeLimit)} token</p></div><strong>${group.percent}%</strong></div>
+      <div class="usage-meter" role="progressbar" aria-label="${escapeHtml(group.label)} 사용률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, group.percent)}"><span style="width:${Math.min(100, group.percent)}%"></span><i style="left:95%" title="로컬 하드 정지 95%"></i></div>
+      <p class="usage-remaining">95% 하드 정지까지 ${formatTokens(group.hardRemaining)} token · 매일 00:00 UTC 초기화</p>
+      <div class="model-usage-list">
+        ${group.models.length ? group.models.map(model => `<div class="model-usage-row"><span><strong>${escapeHtml(model.model)}</strong><small>${formatTokens(model.requests)}회 · 입력 ${formatTokens(model.inputTokens)} · 캐시 ${formatTokens(model.cachedInputTokens)} · 출력 ${formatTokens(model.outputTokens)}</small></span><span><b>${formatTokens(model.totalTokens)}</b><small>${model.estimatedStandardCostUsd == null ? '가격 미등록' : `표준요금 환산 $${model.estimatedStandardCostUsd.toFixed(5)}`}</small></span></div>`).join('') : '<p class="empty-usage">아직 이 그룹의 guard 호출이 없습니다.</p>'}
+      </div>
+    </article>`).join('');
+}
+
+async function loadOpenaiUsage() {
+  const response = await fetch('/api/openai-usage', { cache: 'no-store' });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+  renderOpenaiUsage(data);
+}
+
 async function loadStatus() {
   const response = await fetch('/api/status', { cache: 'no-store' });
   const data = await response.json();
@@ -389,7 +423,7 @@ async function load() {
   refresh.classList.add('spinning');
   summary.textContent = '확인 중';
   try {
-    const [catalogResponse] = await Promise.all([fetch('/api/catalog', { cache: 'no-store' }), loadStatus()]);
+    const [catalogResponse] = await Promise.all([fetch('/api/catalog', { cache: 'no-store' }), loadStatus(), loadOpenaiUsage()]);
     const catalogData = await catalogResponse.json();
     if (!catalogResponse.ok || !catalogData.ok) throw new Error(catalogData.error || `HTTP ${catalogResponse.status}`);
     catalog = catalogData;
@@ -471,3 +505,6 @@ const observer = new IntersectionObserver(entries => {
 sections.forEach(section => observer.observe(section));
 renderArchitectureFilter();
 load();
+window.setInterval(() => {
+  if (!document.hidden) loadOpenaiUsage().catch(() => {});
+}, 30_000);

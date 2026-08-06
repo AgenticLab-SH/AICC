@@ -257,6 +257,23 @@
       "upstream_monitor": { "mode": "manual", "last_checked": "2026-08-06", "next_due": "2026-11-04", "latest_seen_ref": "UNKNOWN", "status": "current" }
     },
     {
+      "id": "karpathy-llm-wiki-pattern",
+      "kind": "pattern",
+      "submitted_url": "https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f",
+      "canonical_url": "https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f",
+      "status": "absorbed",
+      "first_seen_at": "2026-08-06",
+      "last_verified_at": "2026-08-06",
+      "source_date_or_version": "ac46de1ad27f92b28ac95459c782c07f6b8c964a",
+      "license": { "spdx": "UNKNOWN", "evidence": "gist has no separate license notice; wording and code were not copied", "status": "unknown" },
+      "decision": { "mode": "merge", "summary": "원문 pointer, 이동 가능한 Markdown, lint와 출처 추적 원리를 사람 검토 게이트가 있는 한국어 Obsidian 볼트에 결합한다." },
+      "targets": ["guidance/skills/maintain-llm-wiki/SKILL.md"],
+      "combined_with": ["existing knowledge-vault schema", "Obsidian optional viewer", "private Git backup", "AICC guidance deployment"],
+      "local_elements": ["pending generated draft", "사실·추론·적용 제안 분리", "한국어 온보딩", "비밀·세션 제외"],
+      "verification": { "status": "passed", "checked_at": "2026-08-06", "method": "pinned gist review, skill validation, vault checker and guidance deployment", "evidence": "guidance/skills/maintain-llm-wiki/SKILL.md" },
+      "upstream_monitor": { "mode": "manual", "last_checked": "2026-08-06", "next_due": "2026-11-04", "latest_seen_ref": "ac46de1ad27f92b28ac95459c782c07f6b8c964a", "status": "current" }
+    },
+    {
       "id": "telegram-gpt-freeapi-bot",
       "kind": "tool",
       "submitted_url": "https://gall.dcinside.com/mgallery/board/view/?id=thesingularity&no=1222677",

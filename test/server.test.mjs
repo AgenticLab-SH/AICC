@@ -25,6 +25,17 @@ test('server exposes local-control health, status, and allowlisted actions', asy
   const actions = await fetch(`http://127.0.0.1:${port}/api/actions`).then(response => response.json());
   assert.equal(actions.actions[0].name, 'ocx.start');
 
+  const usageServer = createServer({
+    collectStatus: async () => ({ ok: true }),
+    openaiUsageStatus: () => ({ ok: true, source: 'local-guard-ledger', groups: [] }),
+    actionController: { list: () => [], preview: async () => ({}), execute: async () => ({}) }
+  });
+  await new Promise(resolve => usageServer.listen(0, '127.0.0.1', resolve));
+  t.after(() => usageServer.close());
+  const usagePort = usageServer.address().port;
+  const usage = await fetch(`http://127.0.0.1:${usagePort}/api/openai-usage`).then(response => response.json());
+  assert.equal(usage.source, 'local-guard-ledger');
+
   const catalog = await fetch(`http://127.0.0.1:${port}/api/catalog`).then(response => response.json());
   assert.ok(catalog.items.some(item => item.id === 'workspace-mcp'));
 
