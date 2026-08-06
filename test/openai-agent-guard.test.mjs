@@ -53,7 +53,8 @@ test('agent guard preflights all homes before changing any config', t => {
 });
 
 test('agent guard hook denies direct OpenAI calls and allows the AICC gateway', () => {
-  const run = command => spawnSync('python3', [hook], {
+  const python = process.platform === 'win32' ? 'python' : 'python3';
+  const run = command => spawnSync(python, [hook], {
     input: JSON.stringify({ tool_name: 'Bash', tool_input: { command } }),
     encoding: 'utf8'
   });
