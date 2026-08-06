@@ -8,17 +8,20 @@ AI Control Center(AICC)는 GPT 계정, Codex/OCX 모델 경로, ChatGPT의 로�
 ## 최종 구조
 
 ```text
-Codex Desktop -> OCX 10100 -> 선택 provider
-               \-> ocx restore 시 Native Codex
+Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델)
+                                  \-> OCX 10100 (Web 외 모델 전달)
+
+Native Codex profile -> OpenAI 공식 Codex 경로 (복구·독립 사용)
 
 ChatGPT Web -> OpenAI Secure MCP Tunnel -> AICC Workspace MCP
                                          -> 등록 Git 워크스페이스
 ```
 
-Web ChatGPT는 더 이상 Codex 모델 provider로 변환하지 않습니다. 로컬 편집은
-별도 `AICC Workspace MCP`가 담당하고, OCX와 서로의 설정·포트·장애에 의존하지
-않습니다. 필요하면 Workspace MCP가 범위가 고정된 별도 Codex 작업을 생성·조회할
-수 있지만, 이것도 모델 브리지가 아니라 로컬 작업 위임입니다.
+Codex Desktop에서는 `Web / 임시|저장 / 낮음~매우 높음` 모델을 선택해 ChatGPT
+Web을 추론 백엔드로 쓸 수 있습니다. Web 모델의 추론은 OCX나 로컬 Codex 모델
+토큰을 사용하지 않고, 현재 Codex 작업은 파일·터미널·승인·도구 하네스를
+제공합니다. 외부 ChatGPT에서 로컬을 편집하는 별도 경로는 `AICC Workspace MCP`가
+담당하며 Codex 작업을 생성하거나 OCX를 호출하지 않습니다.
 
 현재 검증 상태, 일상 사용법과 기존 질문의 최종 답은
 [현재 운영 상태와 사용법](docs/current-state-and-usage.md)에 정리되어 있습니다.
@@ -92,6 +95,7 @@ aicc action execute --confirmation '<확인 토큰>'
 
 - Account Manager: `components/account-manager`
 - AICC Workspace MCP: `components/workspace-mcp`
+- Codex Web GPT 모델 브리지: 별도 `codex-chatgpt-web` 저장소와 설치 앱
 - OpenCodex(OCX): `vendor/opencodex` 고정 submodule
 - 브라우저·런처·운영 도구: `tools/platform`
 - 지침·스킬·Codex agents 정본: `guidance`

@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { workspacePublicationStatus } from './workspace-publish.mjs';
 
 const ignoredDirectories = new Set([
   '.git', '.next', '.cache', '.venv', 'node_modules', 'dist', 'build', 'coverage',
@@ -85,7 +86,7 @@ export function buildWorkspaceMcpConfig(options = {}) {
   }));
   const preferredDefault = options.defaultRoot ? fs.realpathSync(options.defaultRoot) : null;
   const defaultWorkspace = workspaces.find(item => item.root === preferredDefault)?.alias
-    ?? workspaces.find(item => item.label === 'ai-control-center')?.alias
+    ?? workspaces.find(item => item.label === 'AICC')?.alias
     ?? workspaces[0].alias;
   return {
     schemaVersion: 2,
@@ -103,15 +104,11 @@ export function buildWorkspaceMcpConfig(options = {}) {
     },
     transport: { mode: 'secure-mcp-tunnel', runtimeAlias: 'aicc-workspace' },
     skillRoots: [path.join(workspaceMcpRoot, 'guidance', 'skills')],
-    nativeGateways: {
-      browser: 'separate-codex-capability',
-      computer: 'separate-codex-capability',
-      codex: {
-        tasks: true,
-        transport: 'codex-exec-and-app-server-stdio',
-        sandbox: 'workspace-write',
-        approvals: 'never'
-      }
+    executionBoundary: {
+      modelInference: 'chatgpt-web-only',
+      codexTaskDelegation: false,
+      desktopBrowserAndComputerUse: 'codex-web-gpt-full-harness-only',
+      externalWorkspaceTools: 'workspace-files-terminal-and-aicc-skills'
     }
   };
 }
@@ -190,6 +187,7 @@ export async function workspaceMcpStatus(options = {}) {
     timeout: 5_000
   });
   const tunnel = await (options.tunnelProbe ?? defaultTunnelProbe)(options);
+  const publication = workspacePublicationStatus(options);
   const ready = missing.length === 0 && serverExists && dependencyCheck.status === 0 && tunnel.ready;
   return {
     id: 'workspace-mcp',
@@ -211,8 +209,18 @@ export async function workspaceMcpStatus(options = {}) {
     workspaceCount: config.workspaces.length,
     missingCount: missing.length,
     permissions: config.permissions,
+    executionBoundary: config.executionBoundary ?? null,
     transport: config.transport,
     tunnel: { running: tunnel.running, healthy: tunnel.healthy, ready: tunnel.ready },
+    publication: {
+      needsPublish: publication.needsPublish,
+      toolCount: publication.manifest.toolCount,
+      readToolCount: publication.manifest.readToolCount,
+      writeToolCount: publication.manifest.writeToolCount,
+      tools: publication.manifest.tools,
+      published: publication.published,
+      manageUrl: publication.manageUrl
+    },
     configPath: paths.config,
     command
   };

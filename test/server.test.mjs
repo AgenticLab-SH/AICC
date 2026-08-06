@@ -45,6 +45,29 @@ test('server exposes local-control health, status, and allowlisted actions', asy
   assert.deepEqual(calls[1], ['execute', 'token']);
 });
 
+test('concurrent dashboard status reads share one collection and reuse a short cache', async t => {
+  let calls = 0;
+  const server = createServer({
+    collectStatus: async () => {
+      calls += 1;
+      await new Promise(resolve => setTimeout(resolve, 30));
+      return { ok: true, schemaVersion: 1, calls };
+    },
+    statusCacheTtlMs: 1_000,
+    actionController: { list: () => [], preview: async () => ({}), execute: async () => ({}) }
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  t.after(() => server.close());
+  const { port } = server.address();
+  const endpoint = `http://127.0.0.1:${port}/api/status`;
+
+  const first = await Promise.all([fetch(endpoint), fetch(endpoint), fetch(endpoint)]);
+  await Promise.all(first.map(response => response.json()));
+  await fetch(endpoint).then(response => response.json());
+
+  assert.equal(calls, 1);
+});
+
 test('server runs only allowlisted local diagnostic tasks', async t => {
   const calls = [];
   const server = createServer({

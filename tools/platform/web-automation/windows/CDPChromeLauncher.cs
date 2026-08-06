@@ -153,7 +153,7 @@ internal static class CDPChromeLauncher
         if (string.IsNullOrWhiteSpace(aiccRoot))
         {
             string userHome = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            aiccRoot = Path.Combine(userHome, "dev", "projects", "tools", "ai-control-center");
+            aiccRoot = Path.Combine(userHome, "dev", "projects", "tools", "AICC");
         }
 
         string installer = Path.Combine(aiccRoot, "tools", "platform", "web-automation", "install-cdp-port-badge-extension.mjs");

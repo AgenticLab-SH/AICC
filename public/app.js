@@ -47,13 +47,14 @@ function escapeHtml(value) {
 }
 
 function iconFor(item) {
-  const icons = { dashboard: '⌂', status: '✓', 'workspace-mcp': 'W', 'codex-agents': 'A', 'auth-portal': '↥', codex: 'G', claude: 'C', ocx: 'O', accounts: '◎', workflows: '↗', system: '◇' };
+  const icons = { dashboard: '⌂', status: '✓', 'workspace-mcp': 'M', 'codex-agents': 'A', 'auth-portal': '↥', codex: 'G', claude: 'C', ocx: 'O', 'web-gpt': 'W', accounts: '◎', workflows: '↗', system: '◇' };
   return icons[item.id] || icons[item.group] || '·';
 }
 
 function taskButtonLabel(item) {
   if (item.taskId) return '지금 확인';
   if (item.href) return '화면 열기';
+  if (item.appId) return '앱 열기';
   if (item.webSection) return '이동';
   return '명령 복사';
 }
@@ -153,6 +154,13 @@ async function activateTool(item) {
       opened?.close();
       actionMessage.textContent = error.message;
     }
+    return;
+  }
+  if (item.appId) {
+    try {
+      await postJson('/api/apps/open', { appId: item.appId });
+      actionMessage.textContent = `${item.title}을(를) 열었습니다.`;
+    } catch (error) { actionMessage.textContent = error.message; }
     return;
   }
   if (item.href) return window.open(item.href, '_blank', 'noopener');
@@ -259,6 +267,44 @@ function renderStatus(data) {
     </article>`;
   }).join('');
   const ocx = data.components.find(component => component.id === 'ocx');
+  const webGpt = data.components.find(component => component.id === 'web-gpt');
+  const workspace = data.components.find(component => component.id === 'workspace-mcp');
+  const routeView = (prefix, component) => {
+    $(`#${prefix}RouteState`).textContent = component?.state === 'ready' ? '정상' : component?.state === 'unavailable' ? '미설치' : '확인 필요';
+    $(`#${prefix}RouteDetail`).textContent = component?.detail || '상태를 확인할 수 없습니다.';
+    document.querySelector(`[data-route-card="${prefix === 'workspace' ? 'workspace' : prefix === 'webGpt' ? 'web-gpt' : prefix}"]`)?.classList.toggle('ready', component?.state === 'ready');
+  };
+  routeView('webGpt', webGpt);
+  routeView('ocx', ocx);
+  routeView('workspace', workspace);
+  $('#webGptDetail').textContent = webGpt?.detail || '상태를 확인할 수 없습니다.';
+  $('#webGptIndicator').classList.toggle('online', webGpt?.state === 'ready');
+  $('#webGptVersion').textContent = webGpt?.version || '미확인';
+  $('#webGptMode').textContent = webGpt?.mode === 'full' ? '전체 Codex 하네스' : webGpt?.mode === 'browser-only' ? '브라우저 전용' : '미설정';
+  $('#webGptTurns').textContent = Number.isInteger(webGpt?.activeBrowserTurns) ? `${webGpt.activeBrowserTurns}/${webGpt.maxConcurrentTurns}` : '–';
+  const modelLabels = webGpt?.modelLabels || [];
+  $('#webGptModelCount').textContent = `${modelLabels.length}개`;
+  $('#webGptModels').innerHTML = modelLabels.length ? modelLabels.map(label => `<span class="model-chip">${escapeHtml(label)}</span>`).join('') : '<span class="empty">Web GPT 모델 구성이 아직 없습니다.</span>';
+  $('#workspaceDetail').textContent = workspace?.detail || '상태를 확인할 수 없습니다.';
+  $('#workspaceIndicator').classList.toggle('online', workspace?.state === 'ready');
+  $('#workspaceCount').textContent = Number.isInteger(workspace?.workspaceCount) ? `${workspace.workspaceCount}개` : '–';
+  $('#workspaceTunnel').textContent = workspace?.tunnel?.ready ? '준비됨' : workspace?.tunnel?.running ? '연결 대기' : '중지';
+  $('#workspaceFilePermission').textContent = workspace?.permissions?.files === 'read-write' ? '읽기·쓰기' : workspace?.permissions?.files || '–';
+  $('#workspaceCommandPermission').textContent = workspace?.permissions?.commands ? '사용 가능' : '사용 안 함';
+  const publication = workspace?.publication;
+  const tools = publication?.tools || [];
+  $('#workspaceToolCount').textContent = Number.isInteger(publication?.toolCount) ? `${publication.toolCount}개` : '–';
+  $('#workspaceReadToolCount').textContent = Number.isInteger(publication?.readToolCount) ? `${publication.readToolCount}개` : '–';
+  $('#workspaceWriteToolCount').textContent = Number.isInteger(publication?.writeToolCount) ? `${publication.writeToolCount}개` : '–';
+  $('#workspaceToolSummary').textContent = `${tools.length}개`;
+  $('#workspacePublishState').textContent = publication?.needsPublish ? '갱신 필요' : '게시 일치';
+  $('#workspacePublishState').classList.toggle('attention', publication?.needsPublish === true);
+  $('#workspacePublishDetail').textContent = publication?.needsPublish
+    ? '로컬 도구 구성이 게시된 ChatGPT 앱 스냅샷과 다릅니다. 사전검사 후 앱을 다시 게시하세요.'
+    : publication?.published?.verifiedAt
+      ? `마지막 검증 ${new Date(publication.published.verifiedAt).toLocaleString('ko-KR')}`
+      : '게시 검증 기록이 아직 없습니다.';
+  $('#workspaceTools').innerHTML = tools.length ? tools.map(tool => `<div class="workspace-tool ${tool.mode === 'write' ? 'write' : 'read'}"><span>${tool.mode === 'write' ? '쓰기' : '읽기'}</span><div><strong>${escapeHtml(tool.title)}</strong><code>${escapeHtml(tool.name)}</code></div></div>`).join('') : '<span class="empty">게시할 로컬 도구 스냅샷이 없습니다.</span>';
   $('#ocxDetail').textContent = ocx?.detail || '상태를 확인할 수 없습니다.';
   $('#ocxIndicator').classList.toggle('online', ocx?.state === 'ready');
   const ocxRunning = ocx?.state === 'ready';
@@ -307,6 +353,12 @@ async function load() {
 }
 
 refresh.addEventListener('click', load);
+$('#refreshWebGpt').addEventListener('click', load);
+$('#openWebGpt').addEventListener('click', () => activateTool({ id: 'web-gpt', appId: 'web-gpt', title: 'Codex Web GPT' }));
+$('#workspacePreflight').addEventListener('click', () => {
+  const item = catalog.items.find(candidate => candidate.id === 'workspace-publish');
+  if (item) runTask(item);
+});
 document.addEventListener('click', event => {
   const actionButton = event.target.closest('[data-action]');
   if (actionButton) previewAction(actionButton.dataset.action);

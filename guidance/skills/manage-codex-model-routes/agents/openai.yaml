@@ -1,4 +1,4 @@
 interface:
   display_name: "Codex 모델 경로 안전 관리"
-  short_description: "네이티브·OCX 두 모델 경로를 무중단으로 관리합니다"
+  short_description: "네이티브·Web GPT·OCX 세 경로를 안전하게 관리합니다"
   default_prompt: "Use $manage-codex-model-routes to inspect and safely update my Codex model routes without interrupting active tasks."

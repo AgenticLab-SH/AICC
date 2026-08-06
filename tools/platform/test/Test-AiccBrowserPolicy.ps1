@@ -30,6 +30,8 @@ $macInstaller = Read-Text 'tools/platform/web-automation/Install-SeparatedBrowse
 $whaleInstaller = Read-Text 'tools/platform/web-automation/Install-ImportedBrowserAppsOnMac.ps1'
 $whaleLauncher = Read-Text 'tools/platform/web-automation/macos/CdpWhaleLauncher.swift'
 $statusLauncher = Read-Text 'tools/platform/web-automation/macos/CdpChromeStatusLauncher.swift'
+$normalChromeLauncher = Read-Text 'tools/platform/web-automation/macos/NormalChromeLauncher.swift'
+$normalWhaleLauncher = Read-Text 'tools/platform/web-automation/macos/NormalWhaleLauncher.swift'
 $badgeInstaller = Read-Text 'tools/platform/web-automation/Install-CdpPortBadgeExtension.ps1'
 $identityGuard = Read-Text 'tools/platform/web-automation/Assert-CdpEndpointIdentity.ps1'
 $windowsInstaller = Read-Text 'tools/platform/web-automation/Install-SeparatedBrowserAppsOnWindows.ps1'
@@ -50,6 +52,23 @@ Add-Check 'mac launchers use AICC bundle and plist identity' (
     $macInstaller -match "Key 'AICCUserData'" -and
     $statusLauncher -match 'AICC\.CdpChromeStatusLauncher'
 ) 'bundle and plist identity'
+Add-Check 'normal Chrome and Whale use distinct non-CDP controllers' (
+    $macInstaller -match 'com\.aicc\.chrome\.normal' -and
+    $macInstaller -match 'com\.aicc\.whale\.normal' -and
+    $macInstaller -match 'Library/Application Support/Google/Chrome' -and
+    $macInstaller -match 'Library/Application Support/Naver/Whale' -and
+    $normalChromeLauncher -match '!command\.contains\("--remote-debugging-port="\)' -and
+    $normalWhaleLauncher -match '!command\.contains\("--remote-debugging-port="\)' -and
+    $normalWhaleLauncher -match 'runningApplications\(withBundleIdentifier: "com\.naver\.Whale"\)' -and
+    $normalWhaleLauncher -match 'finishLaunchVerification\(attempt:'
+) 'ordinary profiles remain separate from registered CDP slots'
+Add-Check 'Dock opens normal Whale through its exact controller' (
+    $macInstaller -match "name='NAVER Whale \(일반\)';bundle='com\.aicc\.whale\.normal'" -and
+    $macInstaller -notmatch "name='NAVER Whale';bundle='com\.naver\.Whale';path='/Applications/Whale\.app'" -and
+    $normalWhaleLauncher -match 'NSWorkspace\.didLaunchApplicationNotification' -and
+    $normalWhaleLauncher -match 'NSWorkspace\.didTerminateApplicationNotification' -and
+    $normalWhaleLauncher -notmatch 'Timer\.scheduledTimer'
+) 'prevents vendor bundle activation from selecting CDP Whale 9335'
 Add-Check 'Whale launcher keeps vendor engine unchanged' (
     $whaleInstaller -match '/Applications/Whale\.app/Contents/MacOS/Whale' -and
     $whaleInstaller -match 'persistent-status-web-handler-vendor-browser-launcher' -and

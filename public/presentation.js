@@ -56,6 +56,23 @@ export function diagnosticPresentation(taskId, taskResult) {
     };
   }
 
+  if (taskId === 'workspace.publish-preflight' && result?.publication) {
+    const publication = result.publication;
+    const needsPublish = publication.needsPublish === true;
+    return {
+      ...base,
+      tone: needsPublish || result?.runtime?.tunnelReady !== true ? 'attention' : 'ready',
+      headline: needsPublish ? 'ChatGPT Business 앱을 갱신해야 합니다.' : '게시된 앱과 로컬 도구가 일치합니다.',
+      detail: result?.runtime?.detail || base.detail,
+      highlights: [
+        { label: '전체 도구', value: `${finiteNumber(publication.toolCount) ?? 0}개`, tone: 'ready' },
+        { label: '읽기', value: `${finiteNumber(publication.readToolCount) ?? 0}개`, tone: 'muted' },
+        { label: '쓰기', value: `${finiteNumber(publication.writeToolCount) ?? 0}개`, tone: 'warning' },
+        { label: '게시', value: needsPublish ? '갱신 필요' : '일치', tone: needsPublish ? 'attention' : 'ready' }
+      ]
+    };
+  }
+
   if (result && typeof result === 'object') {
     const failed = finiteNumber(result.failed_count);
     const checked = finiteNumber(result.check_count);
@@ -77,6 +94,6 @@ export function componentPresentation(component) {
   if (component?.optional && component?.state === 'unavailable') {
     return { stateClass: 'optional', label: '선택 기능', hint: '설치하지 않아도 핵심 기능은 정상 동작합니다.' };
   }
-  const labels = { ready: '준비됨', offline: '꺼짐', degraded: '확인 필요', unavailable: '없음' };
+  const labels = { ready: '준비됨', attention: '확인 필요', offline: '꺼짐', degraded: '확인 필요', unavailable: '없음' };
   return { stateClass: component?.state ?? 'unknown', label: labels[component?.state] ?? component?.state ?? '알 수 없음', hint: '' };
 }

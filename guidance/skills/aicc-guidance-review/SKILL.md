@@ -14,7 +14,9 @@ AICC guidance의 반복적인 생태계 변경 판단을 감사한다. 모든 �
 1. 가장 가까운 `AGENTS.md`와 정본 저장소 지시를 먼저 읽는다. 생성된 agent home,
    plugin cache, 인증·세션·계정 DB, 브라우저 프로필을 정본으로 취급하지 않는다.
 2. 사용자의 변경안, 현재 diff, active skill inventory, 배포 정책, 관련 validator를
-   확보한다. 기존 사용자 변경과 이번 변경을 구분한다.
+   확보한다. 외부 소스 흡수라면 `references/source-intake.md`와
+   `references/absorption-ledger.json`을 함께 확인한다. 기존 사용자 변경과 이번
+   변경을 구분한다.
 3. 결정 가능한 검사부터 실행한다. 파일·schema·hash·manifest·중복·배포 tree는
    validator의 결과로 판단하고, 의미적 중복이나 유용성은 validator가 증명했다고
    말하지 않는다.
@@ -34,6 +36,9 @@ AICC guidance의 반복적인 생태계 변경 판단을 감사한다. 모든 �
    검증 gate, rollback을 제시한다. 구현 요청이면 정본만 수정한 뒤 bounded
    Codex/Claude 배포와 재검증까지 수행한다. 정본은 `guidance/skills`와
    `guidance/directives/fragments`이며 생성된 홈은 직접 편집하지 않는다.
+9. 외부 소스를 실제로 흡수·보류·거절·대체했다면 같은 변경에서 원장의 판정,
+   target, 결합 관계, 우리 쪽 변경, 검증과 다음 확인일을 갱신한다. `UNKNOWN`을
+   빈 값이나 확인 완료로 바꾸지 않는다.
 
 ## 경계
 
@@ -45,6 +50,8 @@ AICC guidance의 반복적인 생태계 변경 판단을 감사한다. 모든 �
   plugin은 공유·설치 가능한 배포 단위 또는 skill+connector 묶음이 필요할 때만 쓴다.
 - 검사기 안에 바뀌기 쉬운 의미 정책을 계속 하드코딩하지 않는다. 반복 가능한
   기계 규칙만 코드화하고 판단 기준은 짧은 policy/reference에 둔다.
+- 검사 통과는 source의 유용성·법적 적합성·최신성을 증명하지 않는다. 중요한
+  완료 판정은 같은 명령과 실제 사용자 흐름을 다시 실행할 수 있는 증거를 요구한다.
 - 인증·provider·결제·원격 삭제·보안 경계 변경은 `high-risk-change`의 복구·승인
   계약도 적용한다.
 

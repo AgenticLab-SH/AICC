@@ -88,6 +88,24 @@
 - 최종 1~3개만 채택해 복제가 아닌 적용 원리를 기록하고, 카드에는 출처·실제 사이트·적용/제외 원리·반응형·접근성/성능을 남긴다.
 - 랜딩은 Lapa Ninja·Land-book·Godly, 제품 미리보기는 Godly·Recent, 절제된 타이포는 SiteInspire·Land-book을 우선 탐색한다.
 - 모션 상한선은 Godly·Awwwards에서 관찰하되 최소화는 Apple HIG·실제 도구형 SaaS를 따른다.
+
+### 무료 컴포넌트 후보
+
+현재는 무료·오픈소스 근거를 확인한 후보만 구현 대상으로 삼는다. 2026-08-06
+확인 기준으로 Magic UI, SmoothUI, daisyUI는 공식 저장소가 MIT를 명시한다.
+`component.gallery`는 코드 공급처가 아니라 표준 이름과 디자인 시스템 사례를 찾는
+사전으로만 쓴다.
+
+| 후보 | 쓰임 | 채택 전 확인 |
+| --- | --- | --- |
+| [The Component Gallery](https://component.gallery/) | 패턴 이름·사례 탐색 | 코드 복사 금지; 실제 구현 출처를 별도 확인 |
+| [Magic UI](https://github.com/magicuidesign/magicui) | React/Tailwind 랜딩 모션 | 해당 파일 의존성, 번들, reduced-motion, MIT notice |
+| [SmoothUI](https://github.com/educlopez/smoothui) | shadcn 호환 모션 | production registry, Motion 의존성, fallback, MIT notice |
+| [daisyUI](https://github.com/saadeghi/daisyui) | Tailwind 기본 UI | 현재 Tailwind 호환성, dependency/copy 방식별 MIT notice |
+
+무료라는 말만으로 채택하지 않는다. 실제 source ref, license, 유지보수 상태,
+접근성, CSP, 현재 stack을 다시 확인하고 한 화면에는 한 체계만 사용한다. 유료 전용,
+출처·license 미확인, 생성 결과의 재배포 조건이 불명확한 후보는 `deferred`로 둔다.
 # 컴포넌트 규칙
 
 ## 버튼·아이콘
@@ -195,6 +213,8 @@
 
 - 300ms 미만 작업에는 spinner를 깜빡이게 하지 않는다.
 - 레이아웃을 알면 skeleton, 진행률을 알면 determinate progress를 쓰며 장기 작업은 취소·백그라운드·완료 알림과 `stale` 유지 선택지를 제공한다.
+- 2초를 넘길 수 있는 작업은 이전 데이터 유지 여부, 현재 단계, 취소 또는 이탈 가능 여부,
+  재시도 조건을 함께 보여 준다. 결제·삭제·권한·중요 설정에는 optimistic UI를 쓰지 않는다.
 - `prefers-reduced-motion: reduce`에서는 거리 이동·parallax·자동 재생을 중단하고 duration 축소/crossfade로 대체하되 기능적 상태 변화·필수 실시간 캔버스의 정적 요약은 유지한다.
 # 현대식 기법
 

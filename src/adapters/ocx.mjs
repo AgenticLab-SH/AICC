@@ -1,8 +1,30 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { envCommand, runCommand } from '../lib/command.mjs';
 import { sanitize } from '../lib/redact.mjs';
 
+function executableCandidates(explicit) {
+  if (explicit) return [explicit];
+  const pathEntries = String(process.env.PATH ?? '').split(path.delimiter).filter(Boolean);
+  return [...new Set([
+    process.env.AICC_OCX_EXECUTABLE?.trim(),
+    ...pathEntries.map(entry => path.join(entry, 'ocx')),
+    path.join(os.homedir(), '.local', 'bin', 'ocx'),
+    '/opt/homebrew/bin/ocx',
+    '/usr/local/bin/ocx',
+    'ocx'
+  ].filter(Boolean))];
+}
+
+function firstInstalled(candidates) {
+  return candidates.find(candidate => candidate === 'ocx' || (() => {
+    try { fs.accessSync(candidate, fs.constants.X_OK); return true; } catch { return false; }
+  })()) ?? candidates.at(-1) ?? 'ocx';
+}
+
 export async function ocxStatus(options = {}) {
-  const executable = options.executable || process.env.AICC_OCX_EXECUTABLE?.trim() || 'ocx';
+  const executable = firstInstalled(executableCandidates(options.executable));
   const versionSpec = options.versionCommand ?? envCommand('AICC_OCX_VERSION', {
     executable,
     args: ['--version']

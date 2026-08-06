@@ -8,7 +8,6 @@ import { fileURLToPath } from 'node:url';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import * as z from 'zod/v4';
-import { callCodexAppServer, publicThread, startCodexExec } from './codex-app-server.mjs';
 
 const componentRoot = path.dirname(fileURLToPath(import.meta.url));
 const blockedNames = new Set([
@@ -260,19 +259,6 @@ function skillCatalog(config) {
   return entries.sort((a, b) => a.id.localeCompare(b.id));
 }
 
-function assertThreadWorkspace(thread, workspace) {
-  if (!thread?.cwd || !fs.existsSync(thread.cwd)) throw new Error('Codex 작업의 워크스페이스를 확인할 수 없습니다.');
-  if (fs.realpathSync(thread.cwd) !== fs.realpathSync(workspace.root)) {
-    throw new Error('선택한 워크스페이스의 Codex 작업이 아닙니다.');
-  }
-  return thread;
-}
-
-async function readScopedThread(config, workspace, threadId, includeTurns = false) {
-  const result = await callCodexAppServer(config, 'thread/read', { threadId, includeTurns });
-  return assertThreadWorkspace(result?.thread, workspace);
-}
-
 export function createWorkspaceMcpServer(config, options = {}) {
   const runtimeRoot = options.runtimeRoot ?? path.join(path.dirname(options.configPath ?? os.tmpdir()), 'runtime');
   fs.mkdirSync(runtimeRoot, { recursive: true, mode: 0o700 });
@@ -312,6 +298,29 @@ export function createWorkspaceMcpServer(config, options = {}) {
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
   }, async () => response({ ok: true, default: config.defaultWorkspace, workspaces: config.workspaces.map(({ alias, label }) => ({ alias, label })) }));
 
+  server.registerTool('aicc_workspace_info', {
+    title: '워크스페이스 개요',
+    description: '열린 워크스페이스의 Git 브랜치, 변경 상태와 최상위 항목을 경계 안에서 요약합니다.',
+    inputSchema: leaseFields,
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, withLease(async (input, { workspace }) => {
+    const run = args => spawnSync('/usr/bin/git', args, { cwd: workspace.root, encoding: 'utf8', timeout: 10_000, maxBuffer: config.permissions.maxOutputBytes ?? 262_144 });
+    const branch = run(['branch', '--show-current']);
+    const status = run(['status', '--short']);
+    const entries = fs.readdirSync(workspace.root, { withFileTypes: true })
+      .filter(entry => !entry.isSymbolicLink() && !ignoredSearch.includes(entry.name) && !blockedNames.has(entry.name.toLocaleLowerCase('en-US')))
+      .slice(0, 200)
+      .map(entry => ({ name: entry.name, type: entry.isDirectory() ? 'directory' : entry.isFile() ? 'file' : 'other' }));
+    return response({
+      ok: true,
+      alias: workspace.alias,
+      label: workspace.label,
+      git: branch.status === 0 ? { branch: branch.stdout.trim() || null, clean: !status.stdout.trim(), changed_files: status.stdout.split('\n').filter(Boolean).length } : null,
+      entries,
+      entries_truncated: entries.length >= 200
+    });
+  }));
+
   server.registerTool('aicc_workspace_read', {
     title: '워크스페이스 파일 읽기',
     description: '열린 워크스페이스 안의 텍스트 파일 일부를 읽습니다.',
@@ -325,6 +334,26 @@ export function createWorkspaceMcpServer(config, options = {}) {
     const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
     const start = input.start_line - 1;
     return response({ ok: true, path: input.path, start_line: input.start_line, end_line: Math.min(lines.length, start + input.max_lines), total_lines: lines.length, text: lines.slice(start, start + input.max_lines).join('\n') });
+  }));
+
+  server.registerTool('aicc_workspace_read_many', {
+    title: '워크스페이스 여러 파일 읽기',
+    description: '열린 워크스페이스 안의 작은 텍스트 파일을 한 번에 최대 20개까지 읽습니다.',
+    inputSchema: { ...leaseFields, paths: z.array(z.string().min(1)).min(1).max(20), max_lines_each: z.number().int().min(1).max(1000).default(250) },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
+  }, withLease(async (input, { workspace }) => {
+    const maxReadBytes = config.permissions.maxReadBytes ?? 1_048_576;
+    let totalBytes = 0;
+    const files = input.paths.map(relative => {
+      const file = confinedPath(workspace.root, relative);
+      const stat = fs.statSync(file);
+      if (!stat.isFile()) throw new Error(`일반 파일만 읽을 수 있습니다: ${relative}`);
+      totalBytes += stat.size;
+      if (stat.size > maxReadBytes || totalBytes > maxReadBytes) throw new Error('여러 파일 읽기 합계가 원격 읽기 제한보다 큽니다. 파일 수나 범위를 줄여 주세요.');
+      const lines = fs.readFileSync(file, 'utf8').split(/\r?\n/);
+      return { path: relative, total_lines: lines.length, text: lines.slice(0, input.max_lines_each).join('\n'), truncated: lines.length > input.max_lines_each };
+    });
+    return response({ ok: true, files });
   }));
 
   server.registerTool('aicc_workspace_search', {
@@ -374,6 +403,19 @@ export function createWorkspaceMcpServer(config, options = {}) {
     return response(sessionResult(session, input.output_cursor));
   }));
 
+  server.registerTool('aicc_workspace_process_stop', {
+    title: '실행 중인 명령 중지',
+    description: 'aicc_workspace_exec로 시작한 현재 프로세스 세션 하나에 SIGTERM을 보내고 종료를 요청합니다.',
+    inputSchema: { ...leaseFields, session_id: z.string().regex(/^proc_[a-f0-9]{32}$/) },
+    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
+  }, withLease(async input => {
+    const session = processSessions.get(input.session_id);
+    if (!session) throw new Error('프로세스 세션을 찾지 못했습니다.');
+    if (!session.child || session.exitCode !== null) return response({ ok: true, session_id: input.session_id, stopped: false, already_exited: true, exit_code: session.exitCode });
+    session.child.kill('SIGTERM');
+    return response({ ok: true, session_id: input.session_id, stopped: true });
+  }));
+
   server.registerTool('aicc_workspace_changes', {
     title: '워크스페이스 변경 검토',
     description: '현재 Git 변경 파일과 staged/unstaged 요약을 반환합니다.',
@@ -405,87 +447,6 @@ export function createWorkspaceMcpServer(config, options = {}) {
     if (input.path === 'SKILL.md') active.add(input.skill_id);
     activatedSkills.set(input.lease, active);
     return response({ ok: true, skill_id: input.skill_id, path: input.path, text });
-  }));
-
-  server.registerTool('aicc_codex_task_list', {
-    title: 'Codex 작업 목록',
-    description: '열린 워크스페이스에서 실행된 최근 Codex 작업만 조회합니다. 이 도구는 Web GPT를 모델 provider로 등록하지 않습니다.',
-    inputSchema: { ...leaseFields, limit: z.number().int().min(1).max(50).default(20), archived: z.boolean().default(false) },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
-  }, withLease(async (input, { workspace }) => {
-    const result = await callCodexAppServer(config, 'thread/list', {
-      cwd: workspace.root, limit: input.limit, archived: input.archived, useStateDbOnly: true,
-      sortKey: 'recency_at', sortDirection: 'desc'
-    });
-    return response({ ok: true, tasks: (result?.data ?? []).map(thread => publicThread(thread)), next_cursor: result?.nextCursor ?? null });
-  }));
-
-  server.registerTool('aicc_codex_task_read', {
-    title: 'Codex 작업 읽기',
-    description: '열린 워크스페이스의 Codex 작업에서 사용자·응답·계획·압축 표시만 안전하게 읽습니다. 명령 출력과 비밀 경로는 반환하지 않습니다.',
-    inputSchema: { ...leaseFields, task_id: z.string().uuid() },
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
-  }, withLease(async (input, { workspace }) => {
-    const thread = await readScopedThread(config, workspace, input.task_id, true);
-    return response({ ok: true, task: publicThread(thread, { includeTurns: true }) });
-  }));
-
-  server.registerTool('aicc_codex_task_create', {
-    title: 'Codex 작업 시작',
-    description: '열린 워크스페이스에 지속되는 Codex 작업을 만들고 첫 요청을 보냅니다. 로컬 기본 Codex/OCX 경로를 사용하며 Web GPT 하위 대화를 만들지는 않습니다.',
-    inputSchema: {
-      ...leaseFields,
-      prompt: z.string().min(1).max(50_000),
-      reasoning_effort: z.enum(['low', 'medium', 'high', 'xhigh']).default('high')
-    },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
-  }, withLease(async (input, { workspace }) => {
-    if (config.nativeGateways?.codex?.tasks === false) throw new Error('Codex 작업 위임이 이 AICC 구성에서 꺼져 있습니다.');
-    const job = await startCodexExec(config, {
-      workspaceRoot: workspace.root,
-      runtimeRoot,
-      prompt: input.prompt,
-      reasoningEffort: input.reasoning_effort
-    });
-    return response({
-      ok: true,
-      task_id: job.taskId,
-      status: 'started',
-      note: '작업은 분리된 로컬 Codex exec 프로세스에서 계속됩니다. aicc_codex_task_read로 진행 결과를 확인하세요.'
-    });
-  }));
-
-  server.registerTool('aicc_codex_task_message', {
-    title: 'Codex 작업에 후속 요청',
-    description: '열린 워크스페이스의 기존 Codex 작업에 후속 요청을 보냅니다.',
-    inputSchema: {
-      ...leaseFields,
-      task_id: z.string().uuid(),
-      prompt: z.string().min(1).max(50_000),
-      reasoning_effort: z.enum(['low', 'medium', 'high', 'xhigh']).default('high')
-    },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: true }
-  }, withLease(async (input, { workspace }) => {
-    await readScopedThread(config, workspace, input.task_id, false);
-    const job = await startCodexExec(config, {
-      workspaceRoot: workspace.root,
-      runtimeRoot,
-      taskId: input.task_id,
-      prompt: input.prompt,
-      reasoningEffort: input.reasoning_effort
-    });
-    return response({ ok: true, task_id: job.taskId, status: 'started' });
-  }));
-
-  server.registerTool('aicc_codex_task_archive', {
-    title: 'Codex 작업 보관',
-    description: '열린 워크스페이스의 완료된 Codex 작업을 보관합니다. 삭제하지 않으며 되돌릴 수 있습니다.',
-    inputSchema: { ...leaseFields, task_id: z.string().uuid() },
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true, openWorldHint: false }
-  }, withLease(async (input, { workspace }) => {
-    await readScopedThread(config, workspace, input.task_id, false);
-    await callCodexAppServer(config, 'thread/archive', { threadId: input.task_id });
-    return response({ ok: true, task_id: input.task_id, archived: true });
   }));
 
   return server;

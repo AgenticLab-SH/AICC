@@ -6,7 +6,7 @@ import { renderMenu } from '../src/tui.mjs';
 test('catalog covers every public AICC feature family', () => {
   const catalog = toolCatalog();
   const ids = new Set(catalog.items.map(item => item.id));
-  for (const id of ['dashboard', 'status', 'codex', 'claude', 'ocx', 'accounts', 'workspace-mcp', 'codex-agents', 'setup-check', 'cli-status', 'guidance-check']) {
+  for (const id of ['dashboard', 'status', 'codex', 'claude', 'ocx', 'accounts', 'workspace-mcp', 'workspace-publish', 'codex-agents', 'setup-check', 'cli-status', 'guidance-check']) {
     assert.equal(ids.has(id), true, `missing ${id}`);
   }
   assert.equal(new Set(catalog.items.map(item => item.id)).size, catalog.items.length);

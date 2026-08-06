@@ -385,7 +385,7 @@ def main() -> int:
     parser.add_argument("--no-open", action="store_true")
     parser.add_argument("--no-scan", action="store_true")
     args = parser.parse_args()
-    aicc_root = Path(args.aicc_root or (Path.home() / "dev" / "projects" / "tools" / "ai-control-center")).resolve()
+    aicc_root = Path(args.aicc_root or (Path.home() / "dev" / "projects" / "tools" / "AICC")).resolve()
     backend = SyncBackend(aicc_root, args.profile)
     state = State(backend)
     token = secrets.token_urlsafe(24)

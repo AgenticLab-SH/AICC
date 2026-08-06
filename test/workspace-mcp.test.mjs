@@ -34,8 +34,8 @@ test('configures owner-local state and preserves all exact workspace roots witho
   assert.equal(result.workspaceCount, 1);
   assert.equal(stored.schemaVersion, 2);
   assert.equal(stored.transport.mode, 'secure-mcp-tunnel');
-  assert.equal(stored.nativeGateways.codex.transport, 'codex-exec-and-app-server-stdio');
-  assert.equal(stored.nativeGateways.codex.sandbox, 'workspace-write');
+  assert.equal(stored.executionBoundary.modelInference, 'chatgpt-web-only');
+  assert.equal(stored.executionBoundary.codexTaskDelegation, false);
   assert.deepEqual(stored.workspaces.map(item => item.root), [fs.realpathSync(root)]);
   assert.equal('endpoint' in stored, false);
   if (process.platform !== 'win32') {
@@ -66,4 +66,8 @@ test('status distinguishes a configured STDIO runtime from missing configuration
   assert.equal(ready.state, 'ready');
   assert.equal(ready.serverReady, true);
   assert.equal(ready.workspaceCount, 1);
+  assert.equal(ready.publication.toolCount, 13);
+  assert.equal(ready.publication.readToolCount, 9);
+  assert.equal(ready.publication.writeToolCount, 4);
+  assert.equal(ready.publication.needsPublish, true);
 });

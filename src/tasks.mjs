@@ -7,6 +7,7 @@ import { setupEnvironment } from './setup.mjs';
 import { collectStatus } from './status.mjs';
 import { agentsStatus } from './agents.mjs';
 import { workspaceMcpStatus } from './workspace-mcp.mjs';
+import { workspacePublicationStatus } from './workspace-publish.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const definitions = Object.freeze({
@@ -15,6 +16,32 @@ const definitions = Object.freeze({
   'cli.status': { title: 'CLI 연결 점검', run: () => cliToolStatus() },
   'agents.status': { title: 'Codex 하위 에이전트 상태', run: () => agentsStatus() },
   'workspace.status': { title: 'AICC Workspace MCP 상태', run: () => workspaceMcpStatus() },
+  'workspace.publish-preflight': {
+    title: 'AICC Workspace 게시 사전검사',
+    run: async () => {
+      const runtime = await workspaceMcpStatus();
+      const publication = workspacePublicationStatus();
+      return {
+        ok: runtime.state === 'ready',
+        runtime: {
+          state: runtime.state,
+          detail: runtime.detail,
+          workspaceCount: runtime.workspaceCount ?? 0,
+          tunnelReady: runtime.tunnel?.ready === true
+        },
+        publication: {
+          needsPublish: publication.needsPublish,
+          toolCount: publication.manifest.toolCount,
+          readToolCount: publication.manifest.readToolCount,
+          writeToolCount: publication.manifest.writeToolCount,
+          manifestHash: publication.manifest.hash,
+          tools: publication.manifest.tools,
+          published: publication.published,
+          manageUrl: publication.manageUrl
+        }
+      };
+    }
+  },
   'guidance.check': {
     title: '지침과 스킬 점검',
     command: () => ({

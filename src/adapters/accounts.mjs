@@ -13,7 +13,7 @@ function defaultCommand() {
     const python = process.env.AICC_PYTHON
       ? { executable: process.env.AICC_PYTHON, args: [] }
       : defaultPythonCommand();
-    return { executable: python.executable, args: [...python.args, embeddedScript, 'status', '--json'] };
+    return { executable: python.executable, args: [...python.args, embeddedScript, 'status', '--local-json'] };
   }
   return { executable: 'cm', args: ['status', '--json'] };
 }
@@ -31,7 +31,7 @@ function storedAccountCount() {
 export async function accountStatus(options = {}) {
   const spec = options.command ?? envCommand('AICC_CM_STATUS', defaultCommand());
   const result = await (options.runCommand ?? runCommand)(spec.executable, spec.args, {
-    timeoutMs: options.timeoutMs ?? 25_000
+    timeoutMs: options.timeoutMs ?? 8_000
   });
 
   if (!result.ok) {

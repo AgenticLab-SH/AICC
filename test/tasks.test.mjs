@@ -5,6 +5,7 @@ import { listTasks, runTask } from '../src/tasks.mjs';
 test('diagnostic task allowlist is explicit', () => {
   const ids = listTasks().map(task => task.id);
   assert.ok(ids.includes('workspace.status'));
+  assert.ok(ids.includes('workspace.publish-preflight'));
   assert.ok(ids.includes('agents.status'));
   assert.ok(ids.includes('guidance.check'));
   assert.equal(ids.includes('shell'), false);

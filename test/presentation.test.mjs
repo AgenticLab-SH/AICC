@@ -36,3 +36,16 @@ test('optional unavailable components are not presented as failures', () => {
   });
   assert.equal(componentPresentation({ state: 'degraded' }).label, '확인 필요');
 });
+
+test('workspace publish preflight calls out a frozen ChatGPT tool snapshot', () => {
+  const view = diagnosticPresentation('workspace.publish-preflight', {
+    ok: true,
+    result: {
+      runtime: { tunnelReady: true, detail: '38개 워크스페이스 · Secure Tunnel 준비됨' },
+      publication: { needsPublish: true, toolCount: 13, readToolCount: 9, writeToolCount: 4 }
+    }
+  });
+  assert.equal(view.tone, 'attention');
+  assert.match(view.headline, /갱신/);
+  assert.deepEqual(view.highlights.map(item => item.value), ['13개', '9개', '4개', '갱신 필요']);
+});

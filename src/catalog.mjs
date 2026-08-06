@@ -38,6 +38,12 @@ const items = Object.freeze([
     command: 'ocx', mode: 'external', keywords: ['opencodex', 'model', 'provider', '모델']
   },
   {
+    id: 'web-gpt', group: 'assistants', title: 'Web GPT 모델 브리지',
+    description: 'ChatGPT Web를 Codex 모델로 사용하는 브리지의 상태와 모델 목록을 관리합니다.',
+    command: 'open -a "Codex Web GPT"', mode: 'external', appId: 'web-gpt', featured: true,
+    webSection: 'web-gpt', keywords: ['chatgpt web', 'web gpt', 'bridge', 'model', '웹 지피티', '모델 브리지']
+  },
+  {
     id: 'accounts', group: 'assistants', title: 'GPT 계정 관리',
     description: 'AICC 안에서 계정 상태를 확인하고 기본 GPT Desktop 계정을 안전하게 바꿉니다.',
     command: 'aicc account', mode: 'command', webSection: 'accounts', keywords: ['account', 'cm', '계정', '전환']
@@ -85,9 +91,15 @@ const items = Object.freeze([
   },
   {
     id: 'workspace-mcp', group: 'workflows', title: 'ChatGPT 로컬 작업공간',
-    description: 'Secure MCP Tunnel로 등록된 로컬 프로젝트, 파일, 명령과 AICC 스킬 상태를 확인합니다.',
+    description: 'Secure MCP Tunnel로 외부 ChatGPT에서 등록 프로젝트의 파일, 명령과 AICC 스킬을 직접 사용합니다.',
     command: 'aicc workspace status', mode: 'command', taskId: 'workspace.status', featured: true,
     keywords: ['chatgpt', 'mcp', 'workspace', 'secure tunnel', '로컬', '작업공간']
+  },
+  {
+    id: 'workspace-publish', group: 'workflows', title: 'AICC Workspace 앱 게시 점검',
+    description: '로컬 도구 스냅샷과 Secure Tunnel을 확인하고 ChatGPT Business 앱 갱신 여부를 판단합니다.',
+    command: 'node tools/platform/chatgpt/Prepare-AiccWorkspacePublish.mjs --json', mode: 'command', taskId: 'workspace.publish-preflight',
+    webSection: 'workspace', keywords: ['chatgpt', 'business', 'app', 'publish', 'mcp', '게시', '도구 갱신']
   },
   {
     id: 'codex-agents', group: 'workflows', title: 'Codex 하위 에이전트',

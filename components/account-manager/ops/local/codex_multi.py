@@ -3938,10 +3938,38 @@ def stack_command(args: list[str]):
 #           "local" PC-only (interactive prompt or launches a local GUI)
 
 def _cmd_status(rest):
+    if any(arg == "--local-json" for arg in rest):
+        print(json.dumps(local_status_payload(), ensure_ascii=False, indent=2))
+        return
     if any(arg in ("--json", "-j") for arg in rest):
         print(json.dumps(status_payload(), ensure_ascii=False, indent=2))
         return
     show_table()
+
+
+def local_status_payload() -> dict:
+    """Return account routing state without quota or reset-credit network calls."""
+    ensure_dirs()
+    accounts = list_accounts()
+    app_context = get_live_app_context(accounts)
+    active = app_context["active"]
+    cli_active = set(get_cli_accounts())
+    return {
+        "ok": True,
+        "schema_version": 1,
+        "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "active_account": active,
+        "account_count": len(accounts),
+        "accounts": [
+            {
+                "account": name,
+                "is_app_active": name == active,
+                "is_cli_active": name in cli_active,
+                "subscription_expiry": get_expiry(name),
+            }
+            for name in accounts
+        ],
+    }
 
 
 def status_payload() -> dict:
@@ -4995,6 +5023,7 @@ def main():
     ensure_dirs()
     args = sys.argv[1:]
     command_name = args[0].lower() if args else ""
+    local_status_request = command_name in {"status", "list"} and "--local-json" in args
     try:
         backend = _remote_backend()
         if hasattr(backend, "stop_if_idle"):
@@ -5006,7 +5035,7 @@ def main():
 
     # Keep a known account current whenever cm is opened or used to launch.
     # Help/doctor/dry-run remain read-only.
-    if command_name in sync_commands:
+    if command_name in sync_commands and not local_status_request:
         for account_name in list_accounts():
             sync_isolated_home_auth(account_name)
         sync_matching_app_auth()

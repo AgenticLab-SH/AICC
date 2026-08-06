@@ -3,9 +3,12 @@ param(
     [string]$AiccRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '../../..')).Path,
     [string]$ApplicationsRoot = "$HOME/Applications",
     [string]$ChromeApp = "/Applications/Google Chrome.app",
+    [string]$WhaleApp = "/Applications/Whale.app",
     [string]$PrimaryUserData = "$HOME/.ai-control-center/browser-profiles/chrome/9222/UserData",
     [string]$SecondaryUserData = "$HOME/.ai-control-center/browser-profiles/chrome/9223/UserData",
     [string]$NormalUserData = "$HOME/Library/Application Support/Google/Chrome",
+    [string]$NormalWhaleUserData = "$HOME/Library/Application Support/Naver/Whale",
+    [string]$NormalWhaleProfileDirectory = '',
     [string[]]$OnlyPorts = @(),
     [switch]$NormalOnly,
     [switch]$Replace,
@@ -35,6 +38,21 @@ if ($LASTEXITCODE -ne 0 -or $sourceSignature -notmatch '(?m)^TeamIdentifier=(.+)
     throw "Official Google Chrome executable has no verifiable signing team: $sourceExecutable"
 }
 $sourceTeamIdentifier = $Matches[1].Trim()
+$whaleSourceApp = [IO.Path]::GetFullPath($WhaleApp)
+$whaleSourceExecutable = Join-Path $whaleSourceApp 'Contents/MacOS/Whale'
+if (-not (Test-Path -LiteralPath $whaleSourceApp -PathType Container) -or
+    -not (Test-Path -LiteralPath $whaleSourceExecutable -PathType Leaf)) {
+    throw "Official NAVER Whale application is missing or invalid: $whaleSourceApp"
+}
+$whaleSourceBundle = [string](& /usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' (Join-Path $whaleSourceApp 'Contents/Info.plist') 2>$null)
+if ($whaleSourceBundle -ne 'com.naver.Whale') {
+    throw "Normal Whale source must be official NAVER Whale (com.naver.Whale), actual: $whaleSourceBundle"
+}
+$whaleSourceSignature = (& /usr/bin/codesign -dv --verbose=4 $whaleSourceExecutable 2>&1 | Out-String)
+if ($LASTEXITCODE -ne 0 -or $whaleSourceSignature -notmatch '(?m)^TeamIdentifier=(.+)$') {
+    throw "Official NAVER Whale executable has no verifiable signing team: $whaleSourceExecutable"
+}
+$whaleSourceTeamIdentifier = $Matches[1].Trim()
 $statusLauncherSource = Join-Path $AiccRoot 'tools/platform/web-automation/macos/CdpChromeStatusLauncher.swift'
 if (-not (Test-Path -LiteralPath $statusLauncherSource -PathType Leaf)) {
     throw "Persistent CDP Chrome status launcher source is missing: $statusLauncherSource"
@@ -42,6 +60,10 @@ if (-not (Test-Path -LiteralPath $statusLauncherSource -PathType Leaf)) {
 $normalLauncherSource = Join-Path $AiccRoot 'tools/platform/web-automation/macos/NormalChromeLauncher.swift'
 if (-not (Test-Path -LiteralPath $normalLauncherSource -PathType Leaf)) {
     throw "Normal Chrome launcher source is missing: $normalLauncherSource"
+}
+$normalWhaleLauncherSource = Join-Path $AiccRoot 'tools/platform/web-automation/macos/NormalWhaleLauncher.swift'
+if (-not (Test-Path -LiteralPath $normalWhaleLauncherSource -PathType Leaf)) {
+    throw "Normal Whale launcher source is missing: $normalWhaleLauncherSource"
 }
 $portBadgeExtension = Join-Path $AiccRoot 'tools/platform/web-automation/extensions/aicc-cdp-port-badge'
 if (-not (Test-Path -LiteralPath (Join-Path $portBadgeExtension 'manifest.json') -PathType Leaf)) {
@@ -151,6 +173,99 @@ function New-NormalChromeApp {
         source_engine_team = $sourceTeamIdentifier
         engine_signature = 'vendor_signed_google_chrome_unchanged'
         runtime_model = 'normal_profile_status_controller_via_launchservices'
+        installed = $true
+    }
+}
+
+function New-NormalWhaleApp {
+    $target = [IO.Path]::GetFullPath((Join-Path $resolvedApplicationsRoot 'NAVER Whale (일반).app'))
+    $normalRoot = [IO.Path]::GetFullPath($NormalWhaleUserData)
+    if (-not $normalRoot.StartsWith($HOME + [IO.Path]::DirectorySeparatorChar, [StringComparison]::Ordinal)) {
+        throw "Normal Whale user-data directory must remain under the user home: $normalRoot"
+    }
+    if ($normalRoot -match '[/\\]\.ai-control-center[/\\]browser-profiles[/\\]') {
+        throw 'Normal Whale must not use an AICC CDP browser profile root.'
+    }
+    New-Item -ItemType Directory -Force -Path $normalRoot | Out-Null
+
+    $profileDirectory = $NormalWhaleProfileDirectory.Trim()
+    if (-not $profileDirectory) {
+        $localState = Join-Path $normalRoot 'Local State'
+        if (Test-Path -LiteralPath $localState -PathType Leaf) {
+            try {
+                $state = Get-Content -LiteralPath $localState -Raw | ConvertFrom-Json
+                $profileDirectory = [string]$state.profile.last_used
+            } catch {
+                throw "Normal Whale last-used profile could not be read safely: $localState"
+            }
+        }
+    }
+    if (-not $profileDirectory) { $profileDirectory = 'Default' }
+    if ($profileDirectory -match '[/\\]' -or $profileDirectory -in @('.', '..')) {
+        throw "Normal Whale profile directory must be one profile leaf: $profileDirectory"
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $normalRoot $profileDirectory) -PathType Container)) {
+        throw "Normal Whale profile directory is missing: $normalRoot/$profileDirectory"
+    }
+
+    if (Test-Path -LiteralPath $target) {
+        $running = @(& /usr/bin/pgrep -lf ([regex]::Escape("$target/Contents/MacOS/Normal Whale Launcher")) 2>$null)
+        if ($running.Count -gt 0) { throw "Target browser is running: $target" }
+        if (-not $Replace) { throw "Target application already exists; use -Replace after backup: $target" }
+        $backupRoot = Join-Path $HOME (".ai-control-center/backups/browser-launchers/{0}_normal-whale-app-replace" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
+        New-Item -ItemType Directory -Force -Path $backupRoot | Out-Null
+        if (Test-Path -LiteralPath $lsregister -PathType Leaf) { & $lsregister -u $target | Out-Null }
+        Move-Item -LiteralPath $target -Destination (Join-Path $backupRoot 'NAVER Whale (일반).app.backup')
+    }
+
+    New-Item -ItemType Directory -Force -Path (Join-Path $target 'Contents/MacOS') | Out-Null
+    New-Item -ItemType Directory -Force -Path (Join-Path $target 'Contents/Resources') | Out-Null
+    $wrapperName = 'Normal Whale Launcher'
+    $wrapperPath = Join-Path $target "Contents/MacOS/$wrapperName"
+    & /usr/bin/xcrun swiftc -O -framework AppKit -framework CoreGraphics $normalWhaleLauncherSource -o $wrapperPath
+    if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $wrapperPath -PathType Leaf)) {
+        throw "Failed to compile normal Whale launcher: $wrapperPath"
+    }
+
+    $plist = Join-Path $target 'Contents/Info.plist'
+    & /usr/bin/plutil -create xml1 $plist
+    Set-PlistString -Path $plist -Key 'CFBundleIdentifier' -Value 'com.aicc.whale.normal'
+    Set-PlistString -Path $plist -Key 'CFBundleDisplayName' -Value 'NAVER Whale (일반)'
+    Set-PlistString -Path $plist -Key 'CFBundleName' -Value 'NAVER Whale (일반)'
+    Set-PlistString -Path $plist -Key 'CFBundleExecutable' -Value $wrapperName
+    Set-PlistString -Path $plist -Key 'CFBundlePackageType' -Value 'APPL'
+    Set-PlistString -Path $plist -Key 'CFBundleShortVersionString' -Value '1.0'
+    Set-PlistString -Path $plist -Key 'CFBundleVersion' -Value '1'
+    Set-PlistString -Path $plist -Key 'CFBundleIconFile' -Value 'app.icns'
+    Set-PlistBoolean -Path $plist -Key 'LSMultipleInstancesProhibited' -Value $true
+    Set-PlistString -Path $plist -Key 'AICCLauncherMode' -Value 'normal_whale_profile_status_controller'
+    Set-PlistString -Path $plist -Key 'AICCWhaleApplication' -Value $whaleSourceApp
+    Set-PlistString -Path $plist -Key 'AICCWhaleExecutable' -Value $whaleSourceExecutable
+    Set-PlistString -Path $plist -Key 'AICCUserData' -Value $normalRoot
+    Set-PlistString -Path $plist -Key 'AICCProfileDirectory' -Value $profileDirectory
+    Set-PlistString -Path $plist -Key 'AICCStartURL' -Value 'whale://newtab/'
+
+    $vendorIcon = Join-Path $whaleSourceApp 'Contents/Resources/app.icns'
+    if (-not (Test-Path -LiteralPath $vendorIcon -PathType Leaf)) { throw "NAVER Whale icon is missing: $vendorIcon" }
+    Copy-Item -LiteralPath $vendorIcon -Destination (Join-Path $target 'Contents/Resources/app.icns')
+    & /usr/bin/plutil -lint $plist | Out-Null
+    & /usr/bin/codesign --force --sign - $target 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Failed to sign normal Whale launcher: $target" }
+    & /usr/bin/codesign --verify --deep --strict $target 2>$null
+    if ($LASTEXITCODE -ne 0) { throw "Normal Whale launcher failed strict signature verification: $target" }
+    & /usr/bin/touch $target
+
+    return [ordered]@{
+        name = 'NAVER Whale (일반)'
+        app = $target
+        bundle = 'com.aicc.whale.normal'
+        user_data = $normalRoot
+        profile = $profileDirectory
+        port = $null
+        engine = $whaleSourceExecutable
+        source_engine_team = $whaleSourceTeamIdentifier
+        engine_signature = 'vendor_signed_naver_whale_unchanged'
+        runtime_model = 'normal_whale_profile_status_controller_via_launchservices'
         installed = $true
     }
 }
@@ -291,7 +406,7 @@ function Register-SeparatedBrowserDock {
         [ordered]@{name='Google Chrome (일반)';bundle='com.aicc.chrome.normal';path=(Join-Path $resolvedApplicationsRoot 'Google Chrome (일반).app')},
         [ordered]@{name='CDP Chrome 9222';bundle='com.aicc.chrome.cdp.9222';path=(Join-Path $resolvedApplicationsRoot 'CDP Chrome 9222.app')},
         [ordered]@{name='CDP Chrome 9223';bundle='com.aicc.chrome.cdp.9223';path=(Join-Path $resolvedApplicationsRoot 'CDP Chrome 9223.app')},
-        [ordered]@{name='NAVER Whale';bundle='com.naver.Whale';path='/Applications/Whale.app'},
+        [ordered]@{name='NAVER Whale (일반)';bundle='com.aicc.whale.normal';path=(Join-Path $resolvedApplicationsRoot 'NAVER Whale (일반).app')},
         [ordered]@{name='CDP Whale 9335';bundle='com.aicc.whale.cdp.9335';path=(Join-Path $resolvedApplicationsRoot 'CDP Whale.app')}
     )
 
@@ -315,7 +430,7 @@ function Register-SeparatedBrowserDock {
         $browserBundles = @(
             'com.google.Chrome', 'com.google.chrome.for.testing', 'com.aicc.chrome.normal',
             'com.aicc.chrome.cdp.9222', 'com.aicc.chrome.cdp.9223',
-            'com.naver.Whale', 'com.aicc.whale.cdp.9335'
+            'com.naver.Whale', 'com.aicc.whale.normal', 'com.aicc.whale.cdp.9335'
         )
         $removeIndices = @()
         for ($index = 0; $index -lt 100; $index++) {
@@ -362,6 +477,7 @@ function Register-SeparatedBrowserDock {
 }
 
 $normalRecord = New-NormalChromeApp
+$normalWhaleRecord = New-NormalWhaleApp
 $records = @()
 foreach ($variant in $variants) {
     $records += New-SeparatedChromeApp -Definition $variant
@@ -369,6 +485,7 @@ foreach ($variant in $variants) {
 
 if (Test-Path -LiteralPath $lsregister) {
     & $lsregister -f $normalRecord.app | Out-Null
+    & $lsregister -f $normalWhaleRecord.app | Out-Null
     foreach ($record in $records) { & $lsregister -f $record.app | Out-Null }
 }
 
@@ -376,7 +493,8 @@ $dock = if ($RegisterDock) { Register-SeparatedBrowserDock } else { $null }
 [ordered]@{
     status = 'installed'
     source_app = $sourceApp
+    source_apps = @($sourceApp, $whaleSourceApp)
     applications_root = $resolvedApplicationsRoot
-    apps = @($normalRecord) + @($records)
+    apps = @($normalRecord, $normalWhaleRecord) + @($records)
     dock = $dock
 } | ConvertTo-Json -Depth 6
