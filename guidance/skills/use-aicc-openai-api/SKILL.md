@@ -13,8 +13,9 @@ description: Safely decide, estimate, integrate, test, and monitor OpenAI API ca
 1. 결정적 코드, 기존 로컬 모델, 브라우저 내 처리로 요구를 충족할 수 있으면 API를
    추가하지 않는다.
 2. API가 필요하면 전송할 데이터의 권리·민감도와 failure fallback을 먼저 정한다.
-3. 기본 모델은 `gpt-5.4-mini`로 시작한다. 고성능 풀은 품질 차이를 실제 fixture로
-   증명한 경우에만 사용한다.
+3. `aicc openai provider --json`과 `aicc openai models --json`을 먼저 읽는다. 모델을
+   생략하면 AICC 웹에서 사용자가 지정한 기본 모델을 사용한다. `agentSelectable=false`인
+   모델은 에이전트가 임의로 선택하지 않는다.
 4. 정적 프런트엔드에는 API key나 AICC localhost endpoint를 넣지 않는다. 로컬 backend,
    CLI 도구 또는 desktop companion만 AICC subprocess를 호출한다.
 5. 공개 서버에서 호출해야 하면 AICC 로컬 키를 재사용하지 않는다. 별도 server secret,
@@ -27,20 +28,24 @@ description: Safely decide, estimate, integrate, test, and monitor OpenAI API ca
 
 ```bash
 aicc openai project status --json
+aicc openai provider --json
+aicc openai models --json
 printf '실제 입력' | aicc openai estimate \
-  --model gpt-5.4-mini --max-output 512 --json
+  --max-output 512 --json
 ```
 
 `estimate`가 허용한 뒤에만 실제 호출한다.
 
 ```bash
 printf '실제 입력' | aicc openai ask \
-  --model gpt-5.4-mini --max-output 512 --json
+  --max-output 512 --json
 ```
 
 프로그램에서는 shell 문자열을 조립하지 말고 argument 배열과 stdin pipe를 사용한다.
 subprocess `cwd`를 프로젝트 루트로 고정하고 JSON의 `ok`, `text`, `usage`, `project`를
 검증한다. timeout, non-zero exit, 빈 응답과 한도 차단에는 deterministic fallback을 둔다.
+사용자가 특정 모델을 명시한 경우에만 `--model <id> --user-selected`를 사용한다. 에이전트가
+선택한 호출에는 `--user-selected`를 붙여 정책을 우회하지 않는다.
 
 ## 예산
 
@@ -65,6 +70,8 @@ Git remote가 없는 일회성 작업만 `--project 안전한-별칭`을 쓴다.
 - 입력은 command argument가 아니라 stdin으로 보낸다.
 - AICC 대시보드는 AICC guard를 지난 호출만 센다. 다른 앱과 Playground의 사용량까지
   통제한다고 주장하지 않는다.
+- 무료 quota는 모델 가격으로 가중하지 않고 같은 그룹의 input+output 원시 token 합으로
+  차감된다. 모델별 사용률은 해당 모델이 공유 풀에서 실제 소비한 몫으로 해석한다.
 
 ## 완료 검증
 

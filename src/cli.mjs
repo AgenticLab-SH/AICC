@@ -11,7 +11,7 @@ import { setupEnvironment } from './setup.mjs';
 import { runGuidance } from './guidance.mjs';
 import { runTui } from './tui.mjs';
 import { runTask } from './tasks.mjs';
-import { configureOpenaiProject, estimateOpenaiRequest, guardedOpenaiResponse, openaiProjectStatus, openaiUsageStatus } from './openai-usage.mjs';
+import { configureOpenaiProject, estimateOpenaiRequest, guardedOpenaiResponse, openaiProjectStatus, openaiProviderStatus, openaiUsageStatus } from './openai-usage.mjs';
 import { checkAgents, deployAgents, planAgents, agentsStatus } from './agents.mjs';
 import { configureWorkspaceMcp, workspaceMcpCommand, workspaceMcpStatus, readWorkspaceMcpConfig, workspaceMcpPaths } from './workspace-mcp.mjs';
 
@@ -52,13 +52,17 @@ Usage:
                        고정 버전 CLI 설치와 OCX 연결 설정
   aicc openai usage [--json]
                        무료 토큰 로컬 원장과 95% 하드 한도 확인
+  aicc openai provider [--json]
+                       API 전체 상태·기본 모델·허용 정책 확인
+  aicc openai models [--json]
+                       공식 무료 대상 모델·가격·실계정 확인 상태 조회
   aicc openai project status [--project 이름] [--json]
                        현재 Git 프로젝트의 일일 예산과 사용량 확인
   aicc openai project set --frontier-limit 25000 --efficient-limit 250000
                        현재 프로젝트의 풀별 일일 한도 변경
-  printf '질문' | aicc openai estimate --model gpt-5.4-mini --max-output 512
+  printf '질문' | aicc openai estimate [--model gpt-5.6-luna] --max-output 512
                        네트워크 호출 없이 예약량과 남은 한도 확인
-  printf '질문' | aicc openai ask --model gpt-5.4-mini --max-output 512 [--project 이름]
+  printf '질문' | aicc openai ask [--model gpt-5.6-luna] --max-output 512 [--project 이름]
                        프로젝트·전역 guard를 거쳐 Keychain 키로 호출
   aicc action list      허용된 제어 작업 조회
   aicc action preview <작업> [--selector <계정>]
@@ -372,6 +376,21 @@ async function main() {
       }
       return;
     }
+    if (subcommand === 'provider' || subcommand === 'models') {
+      const result = openaiProviderStatus();
+      if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+      else if (subcommand === 'provider') {
+        console.log(`OpenAI API: ${result.enabled ? '켜짐' : '꺼짐'} · 기본 모델 ${result.defaultModel} · ${result.keyConfigured ? 'Keychain 키 확인됨' : '키 없음'}`);
+        console.log(`에이전트 선택 가능 ${result.models.filter(model => model.agentSelectable).length}개 · 사용자 호출 가능 ${result.models.filter(model => model.callEnabled).length}개`);
+      } else {
+        for (const model of result.models) {
+          const access = model.availability.status === 'available' ? '실호출 확인' : model.availability.status === 'unavailable' ? '호출 불가' : model.lifecycle === 'retired' ? '종료' : '미확인';
+          console.log(`${model.isDefault ? '★' : model.agentSelectable ? '✓' : model.callEnabled ? '○' : '·'} ${model.id}\t${model.groupId}\t${access}\t${model.role}`);
+        }
+        console.log('★ 기본 · ✓ 에이전트 선택 가능 · ○ 사용자 명시 호출만 · 모델별 실제 확인은 AICC 웹의 “연결 확인”을 사용하세요.');
+      }
+      return;
+    }
     if (subcommand === 'project') {
       const projectCommand = process.argv[4] || 'status';
       const project = optionValue('--project') || undefined;
@@ -403,12 +422,13 @@ async function main() {
       const chunks = [];
       for await (const chunk of process.stdin) chunks.push(chunk);
       const input = Buffer.concat(chunks).toString('utf8');
-      const model = optionValue('--model') || 'gpt-5.4-mini';
+      const model = optionValue('--model') || undefined;
       const maxOutputTokens = Number(optionValue('--max-output') || 512);
       const project = optionValue('--project') || undefined;
+      const selectionSource = process.argv.includes('--user-selected') ? 'user' : 'agent';
       const result = subcommand === 'estimate'
-        ? estimateOpenaiRequest({ model, input, maxOutputTokens, project })
-        : await guardedOpenaiResponse({ model, input, maxOutputTokens, project });
+        ? estimateOpenaiRequest({ model, input, maxOutputTokens, project, selectionSource })
+        : await guardedOpenaiResponse({ model, input, maxOutputTokens, project, selectionSource });
       if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
       else if (subcommand === 'ask') {
         console.log(result.text);

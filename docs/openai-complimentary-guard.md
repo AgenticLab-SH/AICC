@@ -3,8 +3,8 @@
 ## 무엇을 해결하나
 
 OpenAI의 API 입력·출력 공유 인센티브를 켠 프로젝트에서 AICC를 통과한 요청만 로컬로
-즉시 세고, 현재 공식 화면에 표시된 두 일일 풀의 95%에서 새 요청을 차단한다. 무료 대상이
-아닌 모델은 기본 차단한다.
+즉시 세고, 현재 공식 화면에 표시된 두 일일 풀의 95%에서 새 요청을 차단한다. 공식 대상
+모델만 카탈로그에 넣고 사용자가 API 호출과 에이전트 자동 선택을 별도로 허용한다.
 
 | UTC 일일 풀 | 공식 한도 | AICC 하드 한도 |
 | --- | ---: | ---: |
@@ -15,6 +15,10 @@ OpenAI의 API 입력·출력 공유 인센티브를 켠 프로젝트에서 AICC�
 [OpenAI 도움말](https://help.openai.com/en/articles/10306912-sharing-feedback-evals-and-api-data-with-openai)을
 기준으로 확인했다. 정책이 바뀌면 코드와 이 문서를 함께 갱신해야 한다.
 
+현재 공식 목록은 `gpt-5.6-sol`을 고성능 풀에, `gpt-5.6-terra`와 `gpt-5.6-luna`를
+경량 풀에 포함한다. AICC 웹은 공식 목록 전체와 날짜가 있는 input/cached/output 가격을
+표시한다. 종료 모델은 참고용으로만 남기고 활성화할 수 없다.
+
 ## 사용법
 
 API key는 macOS Keychain의 `OpenAI API` / `personal-default` 항목에서 읽고 화면·원장·로그에
@@ -23,15 +27,33 @@ API key는 macOS Keychain의 `OpenAI API` / `personal-default` 항목에서 읽�
 ```bash
 aicc openai usage
 aicc openai usage --json
+aicc openai provider --json
+aicc openai models --json
 cd /path/to/git-project
 aicc openai project status
-printf '요약해줘' | aicc openai estimate --model gpt-5.4-mini --max-output 512
-printf '요약해줘' | aicc openai ask --model gpt-5.4-mini --max-output 512
+printf '요약해줘' | aicc openai estimate --max-output 512
+printf '요약해줘' | aicc openai ask --max-output 512
 ```
+
+모델을 생략하면 AICC 웹에서 사용자가 지정한 기본 모델을 쓴다. 사용자가 특정 모델을
+명시적으로 고른 CLI 호출만 `--model <id> --user-selected`를 붙인다. 에이전트가 고른
+요청은 이 옵션을 사용하지 않으며 `agentSelectable` 정책을 따른다.
 
 원장은 `~/.ai-control-center/openai-usage/usage.json`에 사용자 전용 권한으로 저장한다.
 프롬프트, 응답, API key는 저장하지 않고 모델별 요청 수와 input/cached/output token만
 저장한다. UTC 00:00에 새 일자로 자동 전환한다.
+
+## AICC provider 관리
+
+- `API 전체`: AICC를 지나는 모든 새 OpenAI 요청을 켜거나 끈다.
+- `API 모델 허용`: 사용자 명시 호출을 포함해 해당 모델을 사용할 수 있는지 정한다.
+- `Agent 허용`: Codex가 해당 모델을 자동 선택할 수 있는지 정한다.
+- `기본 모델`: 모델을 생략한 agent 호출의 기본값이다.
+- `연결 확인`: 고정된 비민감 문장으로 최소 요청을 보내 실제 계정 접근을 기록한다.
+
+Restricted key에 `api.model.read` scope를 추가하지 않아도 안전하게 운영할 수 있도록,
+공식 무료 목록을 정본으로 쓰고 실제 접근 여부는 개별 최소 호출로 확인한다. 키 권한을
+넓혀 `/v1/models`를 읽는 것은 별도의 보안 결정이며 자동으로 수행하지 않는다.
 
 ## 로컬 프로젝트 예산
 
@@ -73,6 +95,8 @@ aicc openai project set \
 ## 표시를 읽는 법
 
 - 풀 게이지는 같은 무료 한도를 공유하는 모델들의 실제 input+output token 합계다.
+- 모델별 사용률은 해당 모델이 공유 풀에서 소비한 token / 풀 전체 한도다. 같은 token 수는
+  모델 가격과 무관하게 같은 무료 quota를 소비하므로 고가 모델에 임의 가중치를 주지 않는다.
 - 프로젝트 표는 Git 프로젝트별 실제 사용량과 기본/사용자 한도를 보여준다.
 - 모델 행은 해당 모델의 input, cached input, output과 표준 요금 환산 추정치를 나눈다.
 - 요금 환산은 비용 청구액이 아니라 절감 규모를 이해하기 위한 날짜가 있는 가격 snapshot이다.

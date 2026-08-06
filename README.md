@@ -73,6 +73,8 @@ aicc web-gpt open-connectors # ChatGPT 커넥터 설정 열기
 aicc guidance check          # 지침·스킬 정합성
 aicc action list             # 확인 가능한 변경 작업
 aicc openai usage            # 로컬 무료 토큰 guard 원장
+aicc openai provider         # API 전체 상태·기본 모델·허용 정책
+aicc openai models           # 공식 무료 모델·가격·실호출 확인 상태
 aicc openai project status   # 현재 Git 프로젝트 예산과 사용량
 ```
 
@@ -96,11 +98,14 @@ OpenAI API 공유 인센티브를 사용할 때는 프롬프트를 명령행 인
 기본적으로 각 하드 한도의 10%까지만 사용합니다.
 
 ```bash
-printf '짧게 답해줘' | aicc openai estimate --model gpt-5.4-mini --max-output 256
-printf '짧게 답해줘' | aicc openai ask --model gpt-5.4-mini --max-output 256
+printf '짧게 답해줘' | aicc openai estimate --max-output 256
+printf '짧게 답해줘' | aicc openai ask --max-output 256
 ```
 
 프로젝트는 API key를 복사하지 않고 로컬 backend에서 `aicc`를 subprocess로 실행합니다.
+사용자는 AICC 웹에서 OpenAI API 전체 상태, 모델별 호출 허용, 에이전트 자동 선택 허용과
+기본 모델을 관리합니다. 공식 무료 모델 목록과 실제 계정 접근 여부는 분리하며, 개별
+“연결 확인”은 비민감 고정 문장으로 최소 요청을 보내 검증합니다.
 정적 브라우저 앱은 키나 localhost API를 직접 사용하지 않습니다. 배포 서버에서 호출해야
 한다면 별도의 서버 secret·인증·비용 정책을 먼저 설계해야 합니다.
 

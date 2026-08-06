@@ -36,8 +36,44 @@ test('allowlist exposes only named actions', () => {
     'ocx.stop',
     'account.switch',
     'ocx.account.use',
-    'ocx.account.import-cm'
+    'ocx.account.import-cm',
+    'openai.provider.set',
+    'openai.model.set',
+    'openai.default-model.set',
+    'openai.model.probe'
   ]);
+});
+
+test('OpenAI provider policy changes use preview, verification, and the private state root', async t => {
+  const stateRoot = temporaryState(t);
+  const provider = {
+    enabled: true,
+    defaultModel: 'gpt-5.6-luna',
+    models: [
+      { id: 'gpt-5.6-luna', lifecycle: 'current', callEnabled: true, agentSelectable: true, availability: { status: 'untested', checkedAt: null } },
+      { id: 'gpt-5.6-terra', lifecycle: 'current', callEnabled: true, agentSelectable: true, availability: { status: 'untested', checkedAt: null } }
+    ]
+  };
+  const calls = [];
+  const controller = createActionController({
+    stateRoot,
+    getOcxStatus: async () => ({}),
+    getAccountStatus: async () => ({}),
+    getOpenaiProviderStatus: async () => provider,
+    runCommand: async (_executable, args, options) => {
+      calls.push({ args, stateRoot: options.env.AICC_STATE_ROOT });
+      if (args.includes('provider')) provider.enabled = args.at(-1) === 'true';
+      if (args.includes('default-model')) provider.defaultModel = args.at(-1);
+      return commandResult();
+    }
+  });
+  const disable = await controller.preview('openai.provider.set', { enabled: false });
+  assert.equal((await controller.execute(disable.confirmationToken)).ok, true);
+  assert.equal(provider.enabled, false);
+  const defaultPreview = await controller.preview('openai.default-model.set', { model: 'gpt-5.6-terra' });
+  assert.equal((await controller.execute(defaultPreview.confirmationToken)).ok, true);
+  assert.equal(provider.defaultModel, 'gpt-5.6-terra');
+  assert.ok(calls.every(call => call.stateRoot === stateRoot));
 });
 
 test('preview token is stored by hash and can execute only once', async t => {

@@ -38,11 +38,20 @@ const openaiUsageGroups = $('#openaiUsageGroups');
 const openaiUsageUpdated = $('#openaiUsageUpdated');
 const openaiKeyState = $('#openaiKeyState');
 const openaiGuardSummary = $('#openaiGuardSummary');
+const openaiProviderState = $('#openaiProviderState');
+const toggleOpenaiProvider = $('#toggleOpenaiProvider');
+const openaiDefaultModel = $('#openaiDefaultModel');
+const setOpenaiDefaultModel = $('#setOpenaiDefaultModel');
+const openaiModelSummary = $('#openaiModelSummary');
+const openaiModelFilters = $('#openaiModelFilters');
+const openaiModelList = $('#openaiModelList');
+const openaiActionMessage = $('#openaiActionMessage');
 let confirmationToken = null;
 let catalog = { groups: [], items: [] };
 let statusData = null;
 let activeFilter = 'all';
 let activeArchitectureFilter = 'all';
+let activeOpenaiModelFilter = 'current';
 let searchIndex = 0;
 
 function escapeHtml(value) {
@@ -260,6 +269,7 @@ function fillOcxAccounts(data) {
 
 async function previewAction(action, args = {}) {
   actionMessage.textContent = '변경 내용을 확인 중입니다.';
+  openaiActionMessage.textContent = '변경 내용을 확인 중입니다.';
   try {
     const preview = await postJson('/api/actions/preview', { action, args });
     confirmationToken = preview.confirmationToken;
@@ -268,10 +278,12 @@ async function previewAction(action, args = {}) {
     dialogWarnings.innerHTML = (preview.warnings ?? []).map(item => `<li>${escapeHtml(item)}</li>`).join('');
     dialogRollback.textContent = `복구 방법: ${preview.rollback}`;
     actionMessage.textContent = '';
+    openaiActionMessage.textContent = '';
     actionDialog.showModal();
   } catch (error) {
     confirmationToken = null;
     actionMessage.textContent = error.message;
+    openaiActionMessage.textContent = error.message;
   }
 }
 
@@ -281,9 +293,11 @@ async function executeAction() {
   confirmationToken = null;
   confirmAction.disabled = true;
   actionMessage.textContent = '작업을 실행하고 결과를 확인 중입니다.';
+  openaiActionMessage.textContent = '작업을 실행하고 결과를 확인 중입니다.';
   try {
     const result = await postJson('/api/actions/execute', { confirmationToken: token });
     actionMessage.textContent = `${result.title}: ${result.message}`;
+    openaiActionMessage.textContent = `${result.title}: ${result.message}`;
     await load();
   } catch (error) {
     actionMessage.textContent = error.message;
@@ -413,6 +427,61 @@ function formatTokens(value) {
   return Number(value || 0).toLocaleString('ko-KR');
 }
 
+function availabilityLabel(availability) {
+  if (availability?.status === 'available') return '실호출 확인';
+  if (availability?.status === 'unavailable') return '호출 불가';
+  if (availability?.status === 'retired') return '종료';
+  return '미확인';
+}
+
+function formatPrice(value) {
+  return Number.isFinite(value) ? `$${value.toLocaleString('en-US', { maximumFractionDigits: 3 })}` : '–';
+}
+
+function renderOpenaiProvider(provider) {
+  if (!provider) return;
+  const enabled = provider.enabled === true;
+  openaiProviderState.textContent = enabled ? 'API 켜짐' : 'API 꺼짐';
+  openaiProviderState.classList.toggle('ready', enabled);
+  openaiProviderState.classList.toggle('attention', !enabled);
+  toggleOpenaiProvider.textContent = enabled ? 'OpenAI API 전체 끄기' : 'OpenAI API 전체 켜기';
+  toggleOpenaiProvider.dataset.enabled = String(!enabled);
+  toggleOpenaiProvider.classList.toggle('danger', enabled);
+  const selectable = provider.models.filter(model => model.agentSelectable && model.lifecycle !== 'retired');
+  openaiDefaultModel.innerHTML = selectable.map(model => `<option value="${escapeHtml(model.id)}"${model.isDefault ? ' selected' : ''}>${escapeHtml(model.label)} · ${escapeHtml(model.id)}</option>`).join('');
+  setOpenaiDefaultModel.disabled = !selectable.length || openaiDefaultModel.value === provider.defaultModel;
+  const available = provider.models.filter(model => model.availability?.status === 'available').length;
+  openaiModelSummary.textContent = `${provider.models.length}개 공식 대상 · ${selectable.length}개 agent 허용 · ${available}개 실호출 확인`;
+  const filters = [
+    ['current', '현재 권장'], ['enabled', '사용 허용'], ['all', '전체'], ['frontier', '고성능 풀'], ['efficient', '경량 풀']
+  ];
+  openaiModelFilters.innerHTML = filters.map(([id, label]) => `<button type="button" class="filter-chip${activeOpenaiModelFilter === id ? ' active' : ''}" data-openai-filter="${id}" aria-pressed="${activeOpenaiModelFilter === id}">${label}</button>`).join('');
+  const visible = provider.models.filter(model => {
+    if (activeOpenaiModelFilter === 'current') return model.lifecycle === 'current';
+    if (activeOpenaiModelFilter === 'enabled') return model.callEnabled;
+    if (activeOpenaiModelFilter === 'frontier' || activeOpenaiModelFilter === 'efficient') return model.groupId === activeOpenaiModelFilter;
+    return true;
+  });
+  openaiModelList.innerHTML = visible.map(model => {
+    const price = model.pricing;
+    const unavailable = model.lifecycle === 'retired';
+    const accessClass = model.availability?.status === 'available' ? 'ready' : model.availability?.status === 'unavailable' ? 'attention' : '';
+    return `<article class="openai-model-row${model.isDefault ? ' is-default' : ''}">
+      <div class="openai-model-copy">
+        <div class="openai-model-title"><strong>${escapeHtml(model.label)}</strong><code>${escapeHtml(model.id)}</code>${model.isDefault ? '<span class="model-policy-badge default">기본</span>' : ''}<span class="model-policy-badge">${escapeHtml(model.groupId)}</span><span class="model-policy-badge ${accessClass}">${availabilityLabel(model.availability)}</span></div>
+        <p>${escapeHtml(model.role)} · input ${formatPrice(price?.input)} / cached ${formatPrice(price?.cachedInput)} / output ${formatPrice(price?.output)} per 1M</p>
+        <small>오늘 입력 ${formatTokens(model.usage.inputTokens)} · 출력 ${formatTokens(model.usage.outputTokens)} · 공유 풀 ${model.usage.sharedPoolPercent}% · 표준요금 환산 ${model.usage.estimatedStandardCostUsd == null ? '–' : `$${model.usage.estimatedStandardCostUsd.toFixed(5)}`}</small>
+      </div>
+      <div class="openai-model-actions">
+        <button type="button" class="secondary" data-openai-model-action="call" data-model="${escapeHtml(model.id)}" data-call-enabled="${!model.callEnabled}" data-agent-selectable="${model.agentSelectable}" ${unavailable ? 'disabled' : ''}>API ${model.callEnabled ? '끄기' : '켜기'}</button>
+        <button type="button" class="secondary" data-openai-model-action="agent" data-model="${escapeHtml(model.id)}" data-call-enabled="${model.callEnabled}" data-agent-selectable="${!model.agentSelectable}" ${unavailable || !model.callEnabled ? 'disabled' : ''}>Agent ${model.agentSelectable ? '제외' : '허용'}</button>
+        <button type="button" class="secondary" data-openai-model-action="default" data-model="${escapeHtml(model.id)}" ${unavailable || !model.agentSelectable || model.isDefault ? 'disabled' : ''}>기본 지정</button>
+        <button type="button" class="ghost" data-openai-model-action="probe" data-model="${escapeHtml(model.id)}" ${unavailable || !enabled ? 'disabled' : ''}>연결 확인</button>
+      </div>
+    </article>`;
+  }).join('') || '<p class="empty-usage">선택한 조건에 맞는 모델이 없습니다.</p>';
+}
+
 function renderOpenaiUsage(data) {
   openaiKeyState.classList.toggle('online', data.keyConfigured);
   openaiGuardSummary.textContent = data.keyConfigured
@@ -421,6 +490,7 @@ function renderOpenaiUsage(data) {
   openaiUsageUpdated.textContent = data.updatedAt
     ? `즉시 원장 ${new Date(data.updatedAt).toLocaleString('ko-KR')}`
     : `UTC ${data.dayUtc} · 아직 guard 호출 없음`;
+  renderOpenaiProvider(data.provider);
   const groupCards = data.groups.map(group => `
     <article class="usage-group-card">
       <div class="usage-group-head"><div><h3>${escapeHtml(group.label)}</h3><p>${formatTokens(group.tokens)} / ${formatTokens(group.freeLimit)} token</p></div><strong>${group.percent}%</strong></div>
@@ -504,7 +574,27 @@ document.addEventListener('click', event => {
     activeArchitectureFilter = architectureButton.dataset.architectureFilter;
     renderArchitectureFilter();
   }
+  const openaiFilter = event.target.closest('[data-openai-filter]');
+  if (openaiFilter) {
+    activeOpenaiModelFilter = openaiFilter.dataset.openaiFilter;
+    if (statusData) loadOpenaiUsage().catch(error => { openaiActionMessage.textContent = error.message; });
+  }
+  const openaiModelAction = event.target.closest('[data-openai-model-action]');
+  if (openaiModelAction) {
+    const action = openaiModelAction.dataset.openaiModelAction;
+    const model = openaiModelAction.dataset.model;
+    if (action === 'call' || action === 'agent') previewAction('openai.model.set', {
+      model,
+      callEnabled: openaiModelAction.dataset.callEnabled === 'true',
+      agentSelectable: openaiModelAction.dataset.agentSelectable === 'true'
+    });
+    if (action === 'default') previewAction('openai.default-model.set', { model });
+    if (action === 'probe') previewAction('openai.model.probe', { model });
+  }
 });
+toggleOpenaiProvider.addEventListener('click', () => previewAction('openai.provider.set', { enabled: toggleOpenaiProvider.dataset.enabled === 'true' }));
+openaiDefaultModel.addEventListener('change', () => { setOpenaiDefaultModel.disabled = !openaiDefaultModel.value; });
+setOpenaiDefaultModel.addEventListener('click', () => previewAction('openai.default-model.set', { model: openaiDefaultModel.value }));
 switchAccount.addEventListener('click', () => previewAction('account.switch', { selector: accountSelector.value }));
 switchOcxAccount.addEventListener('click', () => previewAction('ocx.account.use', { selector: ocxAccountSelector.value }));
 actionDialog.addEventListener('close', () => {

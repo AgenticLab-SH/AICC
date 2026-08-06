@@ -9,11 +9,13 @@ import { ocxAccountStatus } from './adapters/ocx-accounts.mjs';
 import { runCommand } from './lib/command.mjs';
 import { redactText, sanitize } from './lib/redact.mjs';
 import { defaultPythonCommand } from './config.mjs';
+import { openaiProviderSnapshot, openaiProviderStatus } from './openai-usage.mjs';
 
 const previewLifetimeMs = 2 * 60 * 1000;
 const here = path.dirname(fileURLToPath(import.meta.url));
 const embeddedAccountManager = path.resolve(here, '../components/account-manager/ops/local/codex_multi.py');
 const ocxAccountImporter = path.resolve(here, '../components/account-manager/ops/auth-portal/import_current_to_ocx.py');
+const openaiProviderCommand = path.resolve(here, 'openai-provider-command.mjs');
 
 export class ActionError extends Error {
   constructor(code, message, status = 400) {
@@ -73,6 +75,16 @@ function ocxAccountSnapshot(status) {
       paused: Boolean(account.paused),
       needsReauth: Boolean(account.needsReauth)
     }))
+  };
+}
+
+function openaiProbeSnapshot(status) {
+  return {
+    ...openaiProviderSnapshot(status),
+    availability: Object.fromEntries((status?.models || []).map(item => [item.id, {
+      status: item.availability?.status || 'untested',
+      checkedAt: item.availability?.checkedAt || null
+    }]))
   };
 }
 
@@ -160,6 +172,8 @@ function buildDefinitions(options) {
   delete ocxEnvironment.CODEX_ELECTRON_USER_DATA_PATH;
   delete ocxEnvironment.CODEX_MULTI_ACCOUNT_NAME;
   const ocxCommand = args => ({ executable: ocxExecutable, args, env: ocxEnvironment });
+  const providerEnvironment = { ...inheritedEnvironment, AICC_STATE_ROOT: options.stateRoot };
+  const openaiCommand = args => ({ executable: process.execPath, args: [openaiProviderCommand, ...args], env: providerEnvironment });
   const accountSwitchCommand = options.accountSwitchCommand ?? defaultAccountSwitchCommand;
   return {
     'ocx.start': {
@@ -284,6 +298,85 @@ function buildDefinitions(options) {
         && [before.accounts.length, before.accounts.length + 1].includes(state.accounts.length)
         && !state.accounts.some(account => account.needsReauth)
       )
+    },
+    'openai.provider.set': {
+      title: 'OpenAI API 전체 상태 변경',
+      kind: 'provider',
+      readState: options.getOpenaiProviderStatus,
+      snapshot: openaiProviderSnapshot,
+      prepare(args) {
+        if (typeof args?.enabled !== 'boolean') throw new ActionError('enabled_required', 'API 활성화 상태가 필요합니다.');
+        return { enabled: args.enabled };
+      },
+      describe: args => ({
+        impact: `AICC를 통과하는 OpenAI API 호출을 전체 ${args.enabled ? '허용' : '차단'}합니다.`,
+        warnings: args.enabled ? ['모델별 허용과 프로젝트 예산은 계속 적용됩니다.'] : ['AICC를 사용하는 모든 프로젝트의 새 API 호출이 즉시 차단됩니다.'],
+        rollback: '같은 화면에서 새 미리보기를 만든 뒤 이전 상태로 되돌릴 수 있습니다.'
+      }),
+      command: args => openaiCommand(['provider', '--enabled', String(args.enabled)]),
+      verify: (state, args, _before, result) => Boolean(result.ok && state.enabled === args.enabled),
+      rollback: before => openaiCommand(['provider', '--enabled', String(before.enabled)])
+    },
+    'openai.model.set': {
+      title: 'OpenAI 모델 허용 정책 변경',
+      kind: 'provider',
+      readState: options.getOpenaiProviderStatus,
+      snapshot: openaiProviderSnapshot,
+      prepare(args, state) {
+        const current = state.models.find(item => item.id === args?.model);
+        if (!current) throw new ActionError('model_not_found', '공식 무료 모델 목록에서 대상을 찾지 못했습니다.');
+        if (current.lifecycle === 'retired') throw new ActionError('model_retired', '종료된 모델은 활성화할 수 없습니다.', 409);
+        if (typeof args.callEnabled !== 'boolean' || typeof args.agentSelectable !== 'boolean') throw new ActionError('model_policy_required', '모델 호출과 에이전트 선택 상태가 모두 필요합니다.');
+        return { model: current.id, callEnabled: args.callEnabled, agentSelectable: args.callEnabled && args.agentSelectable };
+      },
+      describe: args => ({
+        impact: `${args.model}의 API 호출을 ${args.callEnabled ? '허용' : '차단'}하고, 에이전트 자동 선택을 ${args.agentSelectable ? '허용' : '차단'}합니다.`,
+        warnings: ['사용자가 명시적으로 선택한 호출과 에이전트 자동 선택을 구분해 적용합니다.'],
+        rollback: '변경 전 모델 정책으로 자동 복구할 수 있습니다.'
+      }),
+      command: args => openaiCommand(['model', '--model', args.model, '--call-enabled', String(args.callEnabled), '--agent-selectable', String(args.agentSelectable)]),
+      verify: (state, args, _before, result) => Boolean(result.ok && state.models[args.model]?.callEnabled === args.callEnabled && state.models[args.model]?.agentSelectable === args.agentSelectable),
+      rollback: (before, _after, args) => openaiCommand(['model', '--model', args.model, '--call-enabled', String(before.models[args.model].callEnabled), '--agent-selectable', String(before.models[args.model].agentSelectable)])
+    },
+    'openai.default-model.set': {
+      title: 'OpenAI 기본 모델 변경',
+      kind: 'provider',
+      readState: options.getOpenaiProviderStatus,
+      snapshot: openaiProviderSnapshot,
+      prepare(args, state) {
+        const target = state.models.find(item => item.id === args?.model);
+        if (!target) throw new ActionError('model_not_found', '공식 무료 모델 목록에서 대상을 찾지 못했습니다.');
+        if (!target.callEnabled || !target.agentSelectable) throw new ActionError('model_not_selectable', 'API와 에이전트 선택이 모두 허용된 모델만 기본값으로 지정할 수 있습니다.', 409);
+        return { model: target.id };
+      },
+      describe: args => ({
+        impact: `모델을 생략한 AICC 에이전트 호출의 기본값을 ${args.model}로 바꿉니다.`,
+        warnings: ['기존 프로젝트가 모델을 명시한 경우에는 영향을 주지 않습니다.'],
+        rollback: '변경 전 기본 모델로 자동 복구할 수 있습니다.'
+      }),
+      command: args => openaiCommand(['default-model', '--model', args.model]),
+      verify: (state, args, _before, result) => Boolean(result.ok && state.defaultModel === args.model),
+      rollback: before => openaiCommand(['default-model', '--model', before.defaultModel])
+    },
+    'openai.model.probe': {
+      title: 'OpenAI 모델 실제 연결 확인',
+      kind: 'diagnostic',
+      timeoutMs: 60_000,
+      readState: options.getOpenaiProviderStatus,
+      snapshot: openaiProbeSnapshot,
+      prepare(args, state) {
+        const target = state.models.find(item => item.id === args?.model);
+        if (!target || target.lifecycle === 'retired') throw new ActionError('model_not_found', '확인할 수 있는 무료 대상 모델이 아닙니다.');
+        if (!state.enabled) throw new ActionError('provider_disabled', '먼저 OpenAI API 전체 사용을 켜야 합니다.', 409);
+        return { model: target.id };
+      },
+      describe: args => ({
+        impact: `${args.model}에 비민감 고정 문장으로 최소 Responses API 요청을 보내 실제 계정 접근을 확인합니다.`,
+        warnings: ['소량의 입력·출력 토큰을 사용하며 공식 Usage 대시보드 반영에는 지연이 있을 수 있습니다.'],
+        rollback: '확인 요청과 사용 토큰은 되돌릴 수 없지만 모델 허용 정책은 변경하지 않습니다.'
+      }),
+      command: args => openaiCommand(['probe', '--model', args.model]),
+      verify: (state, args, before, result) => Boolean(result.ok && state.availability[args.model]?.checkedAt && state.availability[args.model]?.checkedAt !== before.availability[args.model]?.checkedAt)
     }
   };
 }
@@ -298,11 +391,13 @@ export function createActionController(options = {}) {
   const runner = options.runCommand ?? runCommand;
   const definitions = buildDefinitions({
     ...options,
+    stateRoot,
     platform: options.platform ?? process.platform,
     arch: options.arch ?? process.arch,
     getOcxStatus: options.getOcxStatus ?? (() => ocxStatus(options.ocx)),
     getAccountStatus: options.getAccountStatus ?? (() => accountStatus(options.accounts)),
-    getOcxAccountStatus: options.getOcxAccountStatus ?? (() => ocxAccountStatus(options.ocxAccounts))
+    getOcxAccountStatus: options.getOcxAccountStatus ?? (() => ocxAccountStatus(options.ocxAccounts)),
+    getOpenaiProviderStatus: options.getOpenaiProviderStatus ?? (() => openaiProviderStatus({ env: { ...process.env, AICC_STATE_ROOT: stateRoot } }))
   });
 
   function list() {

@@ -5,11 +5,14 @@ import path from 'node:path';
 import test from 'node:test';
 import {
   complimentaryGroupForModel,
+  configureOpenaiProvider,
   configureOpenaiProject,
   estimateOpenaiRequest,
   guardedOpenaiResponse,
   openaiProjectPolicyPath,
   openaiProjectStatus,
+  openaiProviderPolicyPath,
+  openaiProviderStatus,
   openaiUsagePath,
   openaiUsageStatus,
   resolveOpenaiProject
@@ -21,6 +24,8 @@ function temporaryState(t) {
   return {
     file: path.join(root, 'usage.json'),
     policyFile: path.join(root, 'projects.json'),
+    providerFile: path.join(root, 'provider.json'),
+    probeFile: path.join(root, 'model-probes.json'),
     project: { id: 'project-test', label: 'Test Project' },
     apiKey: 'test-only-key',
     now: new Date('2026-08-06T12:00:00Z')
@@ -31,8 +36,10 @@ test('complimentary model groups match the two official pools', () => {
   assert.equal(complimentaryGroupForModel('gpt-5.4'), 'frontier');
   assert.equal(complimentaryGroupForModel('gpt-5.4-2026-03-05'), 'frontier');
   assert.equal(complimentaryGroupForModel('gpt-5.4-mini'), 'efficient');
-  assert.equal(complimentaryGroupForModel('gpt-5.5'), null);
-  assert.equal(complimentaryGroupForModel('gpt-5.6-sol'), null);
+  assert.equal(complimentaryGroupForModel('gpt-5.5'), 'frontier');
+  assert.equal(complimentaryGroupForModel('gpt-5.6-sol'), 'frontier');
+  assert.equal(complimentaryGroupForModel('gpt-5.6-terra'), 'efficient');
+  assert.equal(complimentaryGroupForModel('gpt-5.6-luna'), 'efficient');
   assert.equal(complimentaryGroupForModel('gpt-image-2'), null);
 });
 
@@ -61,7 +68,7 @@ test('guard records exact API usage per model without persisting prompts or keys
   assert.equal(result.usage.totalTokens, 48);
   const status = openaiUsageStatus(options);
   const row = status.groups.find(group => group.id === 'efficient').models[0];
-  assert.equal(row.model, 'gpt-5.4-mini');
+  assert.equal(row.model, 'gpt-5.4-mini-2026-03-17');
   assert.equal(row.cachedInputTokens, 8);
   assert.equal(status.projects[0].label, 'Test Project');
   assert.equal(status.projects[0].tokens, 48);
@@ -88,6 +95,38 @@ test('request estimate applies the default ten percent project budget without ne
   assert.equal(estimate.reservation, Buffer.byteLength(JSON.stringify('estimate only')) + 64);
 });
 
+test('provider catalog exposes all official models while defaulting agents to current efficient models', t => {
+  const options = temporaryState(t);
+  const status = openaiProviderStatus(options);
+  assert.equal(status.enabled, true);
+  assert.equal(status.defaultModel, 'gpt-5.6-luna');
+  assert.ok(status.models.length >= 30);
+  assert.equal(status.models.find(model => model.id === 'gpt-5.6-luna').agentSelectable, true);
+  assert.equal(status.models.find(model => model.id === 'gpt-5.6-sol').agentSelectable, false);
+  assert.equal(status.models.find(model => model.id === 'gpt-4.5-preview-2025-02-27').lifecycle, 'retired');
+});
+
+test('provider and model policy can stop all calls or restrict autonomous model selection', async t => {
+  const options = temporaryState(t);
+  let called = false;
+  options.fetchImpl = async () => { called = true; return new Response('{}'); };
+  await assert.rejects(
+    guardedOpenaiResponse({ model: 'gpt-5.6-sol', input: 'agent choice', maxOutputTokens: 8 }, options),
+    /에이전트가 선택할 수 없도록/
+  );
+  assert.equal(called, false);
+  configureOpenaiProvider({ model: 'gpt-5.6-sol', callEnabled: true, agentSelectable: true }, options);
+  configureOpenaiProvider({ defaultModel: 'gpt-5.6-sol' }, options);
+  assert.equal(openaiProviderStatus(options).defaultModel, 'gpt-5.6-sol');
+  configureOpenaiProvider({ enabled: false }, options);
+  await assert.rejects(
+    guardedOpenaiResponse({ input: 'disabled', maxOutputTokens: 8 }, options),
+    /provider가 꺼져/
+  );
+  assert.equal(called, false);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(openaiProviderPolicyPath(options)).mode & 0o077, 0);
+});
+
 test('custom project budgets persist privately and block before network use', async t => {
   const options = temporaryState(t);
   const configured = configureOpenaiProject(options.project, { frontier: 20, efficient: 10 }, options);
@@ -109,7 +148,7 @@ test('guard rejects non-complimentary models before network use', async t => {
   options.fetchImpl = async () => { called = true; return new Response('{}'); };
   await assert.rejects(
     guardedOpenaiResponse({ model: 'gpt-image-2', input: 'test', maxOutputTokens: 64 }, options),
-    /무료 토큰 대상이 아닌 모델/
+    /공식 무료 대상 모델 목록에 없는 모델/
   );
   assert.equal(called, false);
 });
@@ -121,10 +160,10 @@ test('guard blocks a request whose conservative reservation crosses the hard lim
     schemaVersion: 1,
     dayUtc: '2026-08-06',
     updatedAt: '2026-08-06T11:00:00Z',
-    models: { 'gpt-5.4': { requests: 1, inputTokens: 237_400, cachedInputTokens: 0, outputTokens: 0 } }
+    models: { 'gpt-5.6-sol': { requests: 1, inputTokens: 237_400, cachedInputTokens: 0, outputTokens: 0 } }
   }), { mode: 0o600 });
   await assert.rejects(
-    guardedOpenaiResponse({ model: 'gpt-5.4', input: 'will not run', maxOutputTokens: 512 }, options),
+    guardedOpenaiResponse({ model: 'gpt-5.6-sol', input: 'will not run', maxOutputTokens: 512, selectionSource: 'user' }, options),
     /95% 하드 한도/
   );
 });

@@ -126,6 +126,32 @@ select { width: 100%; min-height: 43px; border: 1px solid var(--line-strong); bo
 .usage-contract p { color: var(--muted); font-size: 12px; }
 .usage-contract code { max-width: 48%; overflow-wrap: anywhere; color: var(--accent); font-size: 10px; line-height: 1.6; text-align: right; }
 .usage-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 10px; }
+.openai-provider-grid { display: grid; grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr); gap: 10px; margin-top: 10px; }
+.openai-provider-control, .openai-default-control { display: grid; gap: 10px; align-content: start; }
+.openai-provider-heading, .openai-model-catalog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.openai-provider-control h3, .openai-default-control h3, .openai-model-catalog h3 { margin-top: 4px; font-size: 15px; }
+.openai-provider-control > p, .openai-default-control label, .openai-catalog-note { color: var(--muted); font-size: 10px; line-height: 1.6; }
+.openai-provider-control button, .openai-default-control button { justify-self: start; }
+.openai-provider-heading .state.ready { color: var(--accent); }
+.openai-provider-heading .state.attention { color: var(--danger); }
+.openai-model-catalog { min-width: 0; margin-top: 10px; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+.openai-model-catalog-head > div:last-child { color: var(--muted); font-size: 10px; text-align: right; }
+.model-filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.openai-model-list { display: grid; gap: 7px; margin-top: 12px; }
+.openai-model-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #0b1713; }
+.openai-model-row.is-default { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: inset 3px 0 0 var(--accent); }
+.openai-model-copy { min-width: 0; display: grid; gap: 5px; }
+.openai-model-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.openai-model-title strong { font-size: 12px; }
+.openai-model-title code { color: var(--accent); font-size: 9px; overflow-wrap: anywhere; }
+.openai-model-copy p, .openai-model-copy small { color: var(--muted); font-size: 9px; line-height: 1.55; }
+.model-policy-badge { padding: 3px 6px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 8px; font-weight: 800; }
+.model-policy-badge.default, .model-policy-badge.ready { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); color: var(--accent); }
+.model-policy-badge.attention { color: var(--warning); }
+.openai-model-actions { display: grid; grid-template-columns: repeat(2, minmax(82px, 1fr)); gap: 5px; }
+.openai-model-actions button { min-height: 32px; padding: 6px 9px; font-size: 9px; }
+.openai-catalog-note { margin-top: 12px; }
+.openai-catalog-note a { color: var(--accent); text-underline-offset: 3px; }
 .usage-group-card { min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
 .usage-group-head { display: flex; justify-content: space-between; gap: 16px; }
 .usage-group-head h3 { font-size: 15px; }
@@ -217,6 +243,9 @@ dialog ul { padding-left: 21px; color: var(--amber); line-height: 1.65; }
   .tool-library, .quick-grid { grid-template-columns: 1fr; }
   .component-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .usage-groups { grid-template-columns: 1fr; }
+  .openai-provider-grid { grid-template-columns: 1fr; }
+  .openai-model-row { grid-template-columns: 1fr; }
+  .openai-model-actions { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 @media (max-width: 680px) {
   html { scroll-padding-top: 74px; }
@@ -247,6 +276,9 @@ dialog ul { padding-left: 21px; color: var(--amber); line-height: 1.65; }
   .usage-contract { align-items: flex-start; flex-direction: column; }
   .usage-contract code { max-width: none; text-align: left; }
   .usage-project-heading, .usage-project-row { align-items: flex-start; grid-template-columns: 1fr; }
+  .openai-provider-heading, .openai-model-catalog-head { display: grid; }
+  .openai-model-catalog-head > div:last-child { text-align: left; }
+  .openai-model-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .usage-project-heading { display: grid; }
   .usage-project-heading code, .usage-project-pools { text-align: left; }
   .provider-control .button-row { width: 100%; }
