@@ -421,7 +421,7 @@ function renderOpenaiUsage(data) {
   openaiUsageUpdated.textContent = data.updatedAt
     ? `즉시 원장 ${new Date(data.updatedAt).toLocaleString('ko-KR')}`
     : `UTC ${data.dayUtc} · 아직 guard 호출 없음`;
-  openaiUsageGroups.innerHTML = data.groups.map(group => `
+  const groupCards = data.groups.map(group => `
     <article class="usage-group-card">
       <div class="usage-group-head"><div><h3>${escapeHtml(group.label)}</h3><p>${formatTokens(group.tokens)} / ${formatTokens(group.freeLimit)} token</p></div><strong>${group.percent}%</strong></div>
       <div class="usage-meter" role="progressbar" aria-label="${escapeHtml(group.label)} 사용률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, group.percent)}"><span style="width:${Math.min(100, group.percent)}%"></span><i style="left:95%" title="로컬 하드 정지 95%"></i></div>
@@ -430,6 +430,17 @@ function renderOpenaiUsage(data) {
         ${group.models.length ? group.models.map(model => `<div class="model-usage-row"><span><strong>${escapeHtml(model.model)}</strong><small>${formatTokens(model.requests)}회 · 입력 ${formatTokens(model.inputTokens)} · 캐시 ${formatTokens(model.cachedInputTokens)} · 출력 ${formatTokens(model.outputTokens)}</small></span><span><b>${formatTokens(model.totalTokens)}</b><small>${model.estimatedStandardCostUsd == null ? '가격 미등록' : `표준요금 환산 $${model.estimatedStandardCostUsd.toFixed(5)}`}</small></span></div>`).join('') : '<p class="empty-usage">아직 이 그룹의 guard 호출이 없습니다.</p>'}
       </div>
     </article>`).join('');
+  const projects = Array.isArray(data.projects) ? data.projects : [];
+  const projectCard = `
+    <article class="usage-project-card">
+      <div class="usage-project-heading"><div><p class="eyebrow">PROJECT BUDGETS</p><h3>프로젝트별 AICC 사용량</h3></div><code>aicc openai project status</code></div>
+      ${projects.length ? `<div class="usage-project-list">${projects.map(project => `
+        <div class="usage-project-row">
+          <span><strong>${escapeHtml(project.label)}</strong><small>${formatTokens(project.requests)}회 · ${formatTokens(project.tokens)} token · ${project.customized ? '사용자 한도' : '기본 10% 한도'}</small></span>
+          <span class="usage-project-pools">${project.groups.map(group => `<small><b>${escapeHtml(group.id)}</b> ${formatTokens(group.tokens)} / ${formatTokens(group.limit)} (${group.percent}%)</small>`).join('')}</span>
+        </div>`).join('')}</div>` : '<p class="empty-usage">프로젝트로 식별된 guard 호출이 아직 없습니다. 기존 호출은 다음 요청부터 Git 프로젝트별로 자동 기록됩니다.</p>'}
+    </article>`;
+  openaiUsageGroups.innerHTML = groupCards + projectCard;
 }
 
 async function loadOpenaiUsage() {

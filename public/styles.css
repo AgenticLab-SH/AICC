@@ -143,6 +143,17 @@ select { width: 100%; min-height: 43px; border: 1px solid var(--line-strong); bo
 .model-usage-row b { color: var(--accent); font-size: 12px; }
 .model-usage-row small { color: var(--muted); font-size: 9px; line-height: 1.4; }
 .empty-usage { padding: 14px; border: 1px dashed var(--line); border-radius: 10px; color: var(--muted); font-size: 11px; text-align: center; }
+.usage-project-card { grid-column: 1 / -1; min-width: 0; padding: 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); }
+.usage-project-heading { display: flex; align-items: end; justify-content: space-between; gap: 16px; }
+.usage-project-heading h3 { margin-top: 4px; font-size: 15px; }
+.usage-project-heading code { color: var(--accent); font-size: 10px; }
+.usage-project-list { display: grid; gap: 7px; margin-top: 14px; }
+.usage-project-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 11px; border: 1px solid var(--line); border-radius: 10px; background: #0b1713; }
+.usage-project-row > span:first-child { min-width: 0; display: grid; gap: 3px; }
+.usage-project-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.usage-project-row small { color: var(--muted); font-size: 9px; }
+.usage-project-pools { display: grid; gap: 3px; text-align: right; }
+.usage-project-pools b { color: var(--accent); font-weight: 800; }
 .usage-explainer { margin-top: 10px; color: var(--muted); font-size: 11px; line-height: 1.65; }
 .large-status { width: 13px; height: 13px; border-radius: 50%; background: var(--amber); box-shadow: 0 0 0 7px rgba(241, 194, 119, .08); }
 .large-status.online { background: var(--accent); box-shadow: 0 0 0 7px rgba(117, 226, 174, .08); }
@@ -235,6 +246,9 @@ dialog ul { padding-left: 21px; color: var(--amber); line-height: 1.65; }
   .provider-control { align-items: flex-start; flex-direction: column; }
   .usage-contract { align-items: flex-start; flex-direction: column; }
   .usage-contract code { max-width: none; text-align: left; }
+  .usage-project-heading, .usage-project-row { align-items: flex-start; grid-template-columns: 1fr; }
+  .usage-project-heading { display: grid; }
+  .usage-project-heading code, .usage-project-pools { text-align: left; }
   .provider-control .button-row { width: 100%; }
   .provider-control .button-row button { flex: 1; }
   .component-grid { grid-template-columns: 1fr; }

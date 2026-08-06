@@ -279,11 +279,11 @@
       <section id="openai-usage" class="anchor-section" aria-labelledby="openaiUsageTitle">
         <div class="section-title"><div><p class="eyebrow">OPENAI API GUARD</p><h2 id="openaiUsageTitle">무료 토큰과 비용 방지</h2></div><span id="openaiUsageUpdated">로컬 원장 확인 중</span></div>
         <article class="panel usage-contract">
-          <div><span id="openaiKeyState" class="large-status offline"></span><div><h3>Default project 전용 로컬 guard</h3><p id="openaiGuardSummary">Keychain과 사용량 원장을 확인하고 있습니다.</p></div></div>
-          <code>printf '질문' | aicc openai ask --model gpt-5.4-mini --max-output 512</code>
+          <div><span id="openaiKeyState" class="large-status offline"></span><div><h3>AICC 통합 API gateway</h3><p id="openaiGuardSummary">Keychain과 사용량 원장을 확인하고 있습니다.</p></div></div>
+          <code>printf '질문' | aicc openai estimate --model gpt-5.4-mini --max-output 512</code>
         </article>
         <div id="openaiUsageGroups" class="usage-groups" aria-live="polite"></div>
-        <p class="usage-explainer">무료 할당량은 모델별이 아니라 두 모델 그룹에서 공유됩니다. 그래서 공식 “모델별 무료 퍼센트”는 없습니다. AICC는 그룹의 실제 토큰 비율과 각 모델의 입력·캐시·출력 토큰, 공식 표준요금 환산액을 함께 표시합니다. 웹 대시보드 수치는 AICC guard를 거친 요청에 즉시 반영됩니다.</p>
+        <p class="usage-explainer">무료 할당량은 모델별이 아니라 두 모델 그룹에서 공유됩니다. AICC는 전역 풀의 95%에서 정지하고, 각 Git 프로젝트는 기본적으로 풀별 10%까지 사용합니다. 프로젝트는 키를 받지 않고 AICC CLI를 subprocess로 호출하며, 정적 프런트엔드에는 API 키를 넣지 않습니다. 대시보드 수치는 AICC guard를 거친 요청에 즉시 반영됩니다.</p>
       </section>
 
       <section id="system" class="anchor-section" aria-labelledby="systemTitle">

@@ -3,12 +3,28 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { complimentaryGroupForModel, guardedOpenaiResponse, openaiUsagePath, openaiUsageStatus } from '../src/openai-usage.mjs';
+import {
+  complimentaryGroupForModel,
+  configureOpenaiProject,
+  estimateOpenaiRequest,
+  guardedOpenaiResponse,
+  openaiProjectPolicyPath,
+  openaiProjectStatus,
+  openaiUsagePath,
+  openaiUsageStatus,
+  resolveOpenaiProject
+} from '../src/openai-usage.mjs';
 
 function temporaryState(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-openai-usage-'));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
-  return { file: path.join(root, 'usage.json'), apiKey: 'test-only-key', now: new Date('2026-08-06T12:00:00Z') };
+  return {
+    file: path.join(root, 'usage.json'),
+    policyFile: path.join(root, 'projects.json'),
+    project: { id: 'project-test', label: 'Test Project' },
+    apiKey: 'test-only-key',
+    now: new Date('2026-08-06T12:00:00Z')
+  };
 }
 
 test('complimentary model groups match the two official pools', () => {
@@ -47,9 +63,44 @@ test('guard records exact API usage per model without persisting prompts or keys
   const row = status.groups.find(group => group.id === 'efficient').models[0];
   assert.equal(row.model, 'gpt-5.4-mini');
   assert.equal(row.cachedInputTokens, 8);
+  assert.equal(status.projects[0].label, 'Test Project');
+  assert.equal(status.projects[0].tokens, 48);
   const persisted = fs.readFileSync(openaiUsagePath(options), 'utf8');
   assert.doesNotMatch(persisted, /짧은 테스트|test-only-key|테스트 응답/);
   if (process.platform !== 'win32') assert.equal(fs.statSync(openaiUsagePath(options)).mode & 0o077, 0);
+});
+
+test('project identity uses an opaque stable id and never exposes the supplied alias as a path', () => {
+  const first = resolveOpenaiProject({ project: 'music-score-studio' });
+  const second = resolveOpenaiProject({ project: 'music-score-studio' });
+  assert.equal(first.id, second.id);
+  assert.match(first.id, /^project-[0-9a-f]{12}$/);
+  assert.equal(first.label, 'music-score-studio');
+  assert.throws(() => resolveOpenaiProject({ project: '../escape' }), /프로젝트 이름/);
+});
+
+test('request estimate applies the default ten percent project budget without network use', t => {
+  const options = temporaryState(t);
+  const estimate = estimateOpenaiRequest({ model: 'gpt-5.4-mini', input: 'estimate only', maxOutputTokens: 64 }, options);
+  assert.equal(estimate.groupId, 'efficient');
+  assert.equal(estimate.project.limit, 237_500);
+  assert.equal(estimate.project.customized, false);
+  assert.equal(estimate.reservation, Buffer.byteLength(JSON.stringify('estimate only')) + 64);
+});
+
+test('custom project budgets persist privately and block before network use', async t => {
+  const options = temporaryState(t);
+  const configured = configureOpenaiProject(options.project, { frontier: 20, efficient: 10 }, options);
+  assert.equal(configured.customized, true);
+  assert.equal(openaiProjectStatus(options).groups.find(group => group.id === 'efficient').limit, 10);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(openaiProjectPolicyPath(options)).mode & 0o077, 0);
+  let called = false;
+  options.fetchImpl = async () => { called = true; return new Response('{}'); };
+  await assert.rejects(
+    guardedOpenaiResponse({ model: 'gpt-5.4-mini', input: 'budget', maxOutputTokens: 8 }, options),
+    /프로젝트의 경량 모델 풀 일일 한도/
+  );
+  assert.equal(called, false);
 });
 
 test('guard rejects non-complimentary models before network use', async t => {

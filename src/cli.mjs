@@ -11,7 +11,7 @@ import { setupEnvironment } from './setup.mjs';
 import { runGuidance } from './guidance.mjs';
 import { runTui } from './tui.mjs';
 import { runTask } from './tasks.mjs';
-import { guardedOpenaiResponse, openaiUsageStatus } from './openai-usage.mjs';
+import { configureOpenaiProject, estimateOpenaiRequest, guardedOpenaiResponse, openaiProjectStatus, openaiUsageStatus } from './openai-usage.mjs';
 import { checkAgents, deployAgents, planAgents, agentsStatus } from './agents.mjs';
 import { configureWorkspaceMcp, workspaceMcpCommand, workspaceMcpStatus, readWorkspaceMcpConfig, workspaceMcpPaths } from './workspace-mcp.mjs';
 
@@ -52,8 +52,14 @@ Usage:
                        고정 버전 CLI 설치와 OCX 연결 설정
   aicc openai usage [--json]
                        무료 토큰 로컬 원장과 95% 하드 한도 확인
-  printf '질문' | aicc openai ask --model gpt-5.4-mini --max-output 512
-                       Keychain 키로 무료 대상 모델만 guard를 거쳐 호출
+  aicc openai project status [--project 이름] [--json]
+                       현재 Git 프로젝트의 일일 예산과 사용량 확인
+  aicc openai project set --frontier-limit 25000 --efficient-limit 250000
+                       현재 프로젝트의 풀별 일일 한도 변경
+  printf '질문' | aicc openai estimate --model gpt-5.4-mini --max-output 512
+                       네트워크 호출 없이 예약량과 남은 한도 확인
+  printf '질문' | aicc openai ask --model gpt-5.4-mini --max-output 512 [--project 이름]
+                       프로젝트·전역 guard를 거쳐 Keychain 키로 호출
   aicc action list      허용된 제어 작업 조회
   aicc action preview <작업> [--selector <계정>]
                        변경 내용 미리보기와 확인 토큰 발급
@@ -366,18 +372,51 @@ async function main() {
       }
       return;
     }
-    if (subcommand === 'ask') {
+    if (subcommand === 'project') {
+      const projectCommand = process.argv[4] || 'status';
+      const project = optionValue('--project') || undefined;
+      if (projectCommand === 'status') {
+        const result = openaiProjectStatus({ project });
+        if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+        else {
+          console.log(`${result.project.label} · OpenAI 프로젝트 guard · UTC ${result.dayUtc}${result.customized ? ' · 사용자 한도' : ' · 기본 10% 한도'}`);
+          for (const group of result.groups) console.log(`${group.label}: ${group.tokens.toLocaleString()} / ${group.limit.toLocaleString()} token (${group.percent}%, 잔여 ${group.remaining.toLocaleString()})`);
+        }
+        return;
+      }
+      if (projectCommand === 'set') {
+        const result = configureOpenaiProject(project, {
+          frontier: Number(optionValue('--frontier-limit')),
+          efficient: Number(optionValue('--efficient-limit'))
+        });
+        if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+        else {
+          console.log(`${result.project.label} 프로젝트의 OpenAI 일일 한도를 저장했습니다.`);
+          for (const group of result.groups) console.log(`${group.label}: ${group.limit.toLocaleString()} token`);
+        }
+        return;
+      }
+      throw new Error(`알 수 없는 openai project 명령: ${projectCommand}`);
+    }
+    if (subcommand === 'ask' || subcommand === 'estimate') {
       if (process.stdin.isTTY) throw new Error('입력 내용 노출을 줄이기 위해 stdin으로 프롬프트를 전달하세요.');
       const chunks = [];
       for await (const chunk of process.stdin) chunks.push(chunk);
       const input = Buffer.concat(chunks).toString('utf8');
       const model = optionValue('--model') || 'gpt-5.4-mini';
       const maxOutputTokens = Number(optionValue('--max-output') || 512);
-      const result = await guardedOpenaiResponse({ model, input, maxOutputTokens });
+      const project = optionValue('--project') || undefined;
+      const result = subcommand === 'estimate'
+        ? estimateOpenaiRequest({ model, input, maxOutputTokens, project })
+        : await guardedOpenaiResponse({ model, input, maxOutputTokens, project });
       if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
-      else {
+      else if (subcommand === 'ask') {
         console.log(result.text);
-        console.error(`\n[AICC guard] ${result.model} · ${result.usage.totalTokens.toLocaleString()} token`);
+        console.error(`\n[AICC guard] ${result.project.label} · ${result.model} · ${result.usage.totalTokens.toLocaleString()} token`);
+      } else {
+        console.log(`${result.project.label} · ${result.model} · 최대 예약 ${result.reservation.toLocaleString()} token`);
+        console.log(`프로젝트 잔여(예약 후): ${result.project.remainingAfterReservation.toLocaleString()} / ${result.project.limit.toLocaleString()}`);
+        console.log(`전역 잔여(예약 후): ${result.global.remainingAfterReservation.toLocaleString()} / ${result.global.limit.toLocaleString()}`);
       }
       return;
     }
