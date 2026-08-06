@@ -38,6 +38,7 @@ let confirmationToken = null;
 let catalog = { groups: [], items: [] };
 let statusData = null;
 let activeFilter = 'all';
+let activeArchitectureFilter = 'all';
 let searchIndex = 0;
 
 function escapeHtml(value) {
@@ -73,6 +74,28 @@ function renderCatalog() {
     .map(group => `<button type="button" class="filter-chip${activeFilter === group.id ? ' active' : ''}" data-filter="${escapeHtml(group.id)}" aria-pressed="${activeFilter === group.id}">${escapeHtml(group.label)}</button>`).join('');
   const items = activeFilter === 'all' ? catalog.items : catalog.items.filter(item => item.group === activeFilter);
   toolLibrary.innerHTML = items.map(item => toolCard(item)).join('');
+}
+
+function renderArchitectureFilter() {
+  document.querySelectorAll('[data-architecture-filter]').forEach(button => {
+    const selected = button.dataset.architectureFilter === activeArchitectureFilter;
+    button.classList.toggle('active', selected);
+    button.setAttribute('aria-pressed', String(selected));
+  });
+  document.querySelectorAll('[data-map-groups]').forEach(element => {
+    const groups = String(element.dataset.mapGroups || '').split(/\s+/).filter(Boolean);
+    element.classList.toggle('is-dimmed', activeArchitectureFilter !== 'all' && !groups.includes(activeArchitectureFilter));
+  });
+}
+
+function renderLiveMapState(id, ready, label, detail) {
+  const pill = document.querySelector(`[data-live-state="${id}"]`);
+  if (pill) {
+    pill.textContent = label;
+    pill.classList.toggle('ready', ready === true);
+    pill.classList.toggle('attention', ready !== true);
+  }
+  document.querySelectorAll(`[data-live-detail="${id}"]`).forEach(element => { element.textContent = detail; });
 }
 
 function matchingTools(query) {
@@ -277,6 +300,30 @@ function renderStatus(data) {
   routeView('webGpt', webGpt);
   routeView('ocx', ocx);
   routeView('workspace', workspace);
+  renderLiveMapState(
+    'web-bridge',
+    webGpt?.healthy === true && webGpt?.routeActive === true,
+    webGpt?.healthy === true && webGpt?.routeActive === true ? '브리지 정상' : '브리지 확인',
+    webGpt?.detail || 'Web GPT 상태를 확인할 수 없습니다.'
+  );
+  renderLiveMapState(
+    'web-harness',
+    webGpt?.harnessReady === true,
+    webGpt?.harnessReady === true ? 'Full 하네스 준비' : webGpt?.harnessConfigured ? 'Tunnel 확인 필요' : 'Full 하네스 구성 전',
+    webGpt?.harnessReady === true ? '현재 프로젝트 도구 사용 가능' : webGpt?.harnessConfigured ? '전용 Tunnel 또는 커넥터 확인 필요' : '브라우저 전용 모드'
+  );
+  renderLiveMapState(
+    'workspace-tunnel',
+    workspace?.tunnel?.ready === true,
+    workspace?.tunnel?.ready === true ? 'Tunnel 준비' : 'Tunnel 확인',
+    workspace?.tunnel?.ready === true ? '외부 ChatGPT 연결 준비됨' : '로컬 MCP 또는 Tunnel 확인 필요'
+  );
+  renderLiveMapState(
+    'ocx',
+    ocx?.state === 'ready',
+    ocx?.state === 'ready' ? 'OCX 정상' : 'OCX 확인',
+    ocx?.detail || 'OCX 상태를 확인할 수 없습니다.'
+  );
   $('#webGptDetail').textContent = webGpt?.detail || '상태를 확인할 수 없습니다.';
   $('#webGptIndicator').classList.toggle('online', webGpt?.state === 'ready');
   $('#webGptVersion').textContent = webGpt?.version || '미확인';
@@ -378,6 +425,11 @@ document.addEventListener('click', event => {
     renderCatalog();
     toolFilters.querySelector(`[data-filter="${CSS.escape(activeFilter)}"]`)?.focus();
   }
+  const architectureButton = event.target.closest('[data-architecture-filter]');
+  if (architectureButton) {
+    activeArchitectureFilter = architectureButton.dataset.architectureFilter;
+    renderArchitectureFilter();
+  }
 });
 switchAccount.addEventListener('click', () => previewAction('account.switch', { selector: accountSelector.value }));
 switchOcxAccount.addEventListener('click', () => previewAction('ocx.account.use', { selector: ocxAccountSelector.value }));
@@ -417,4 +469,5 @@ const observer = new IntersectionObserver(entries => {
   document.querySelectorAll('.nav-link').forEach(link => link.classList.toggle('active', link.getAttribute('href') === `#${current.target.id}`));
 }, { rootMargin: '-20% 0px -65% 0px', threshold: [0, .2, .6] });
 sections.forEach(section => observer.observe(section));
+renderArchitectureFilter();
 load();
