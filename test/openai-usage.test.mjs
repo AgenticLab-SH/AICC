@@ -49,7 +49,7 @@ test('guard records exact API usage per model without persisting prompts or keys
   assert.equal(row.cachedInputTokens, 8);
   const persisted = fs.readFileSync(openaiUsagePath(options), 'utf8');
   assert.doesNotMatch(persisted, /짧은 테스트|test-only-key|테스트 응답/);
-  assert.equal(fs.statSync(openaiUsagePath(options)).mode & 0o077, 0);
+  if (process.platform !== 'win32') assert.equal(fs.statSync(openaiUsagePath(options)).mode & 0o077, 0);
 });
 
 test('guard rejects non-complimentary models before network use', async t => {
