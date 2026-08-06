@@ -97,11 +97,27 @@ function requestAllowed(req, res) {
 export function createServer(options = {}) {
   const statusCollector = options.collectStatus ?? collectStatus;
   const actionController = options.actionController ?? createActionController(options.actions);
+  const statusCacheTtlMs = options.statusCacheTtlMs ?? 10_000;
+  let statusCache = null;
+  let statusCacheAt = 0;
+  let statusInFlight = null;
+  const currentStatus = async () => {
+    if (statusCache && Date.now() - statusCacheAt < statusCacheTtlMs) return statusCache;
+    if (statusInFlight) return statusInFlight;
+    const pending = Promise.resolve(statusCollector()).then(result => {
+      statusCache = result;
+      statusCacheAt = Date.now();
+      return result;
+    });
+    statusInFlight = pending;
+    try { return await pending; }
+    finally { if (statusInFlight === pending) statusInFlight = null; }
+  };
   return http.createServer(async (req, res) => {
     const url = new URL(req.url, `http://${req.headers.host || `${host}:${port}`}`);
     if (req.method === 'GET' && url.pathname === '/healthz') return json(res, 200, { ok: true, mode: 'local-control' });
     if (req.method === 'GET' && url.pathname === '/api/status') {
-      try { return json(res, 200, await statusCollector()); }
+      try { return json(res, 200, await currentStatus()); }
       catch (error) { return json(res, 500, { ok: false, error: error.message }); }
     }
     if (req.method === 'GET' && url.pathname === '/api/catalog') {

@@ -109,6 +109,12 @@ python3 scripts/prepare_context_bundle.py \
 solver를 쓰고, 관성적으로 개수를 늘리지 않는다. 최신 정보는 공식 원문 URL과
 문서 날짜·버전을 요구하고 핵심 사실을 원문 또는 로컬 증거로 재검증한다.
 
+여러 Web GPT 대화로 fan-out하는 다중 조사는 사용자가 명시한 경우에만
+`references/multi-research.md`를 읽고 수행한다. 각 대화에는 겹치지 않는 질문과
+최소 공통 사실만 보내며, 응답 전체 대신 claim·근거 URL·기준일·반례·미확인만
+구조화해 한 merger에 전달한다. 별도 Multi-GPT CLI나 Codex-Web-GPT bridge는
+설치·실행하지 않는다.
+
 최종 보고에는 사용한 계정 별칭·워크스페이스, 내장 Browser 또는 CDP 경로,
 모델/effort, 회수한 핵심 결과, 독립 검증 여부를 구분한다. 비밀, pacing lock,
 lease token은 보고하지 않는다.

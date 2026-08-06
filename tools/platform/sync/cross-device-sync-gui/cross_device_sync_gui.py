@@ -581,7 +581,7 @@ def main() -> int:
     parser.add_argument("--aicc-root")
     parser.add_argument("--scan-now", action="store_true")
     args = parser.parse_args()
-    aicc_root = Path(args.aicc_root or os.environ.get("AICC_ROOT") or (Path.home() / "dev" / "projects" / "tools" / "ai-control-center")).resolve()
+    aicc_root = Path(args.aicc_root or os.environ.get("AICC_ROOT") or (Path.home() / "dev" / "projects" / "tools" / "AICC")).resolve()
     backend = SyncBackend(aicc_root, args.profile)
     root = Tk()
     gui = SyncGui(root, backend)

@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { accountStatus } from '../src/adapters/accounts.mjs';
@@ -6,6 +8,7 @@ import { authPortalStatus } from '../src/adapters/auth-portal.mjs';
 import { ocxStatus } from '../src/adapters/ocx.mjs';
 import { ocxAccountStatus } from '../src/adapters/ocx-accounts.mjs';
 import { localToolStatus } from '../src/adapters/local-tools.mjs';
+import { webGptStatus } from '../src/adapters/web-gpt.mjs';
 
 test('account adapter accepts the masked cm JSON contract', async () => {
   const status = await accountStatus({
@@ -47,6 +50,26 @@ test('OCX adapter combines installed version and health', async () => {
   assert.equal(status.state, 'ready');
   assert.equal(status.version, '2.7.42');
   assert.equal(status.runtime.port, 10100);
+});
+
+test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex route', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-web-gpt-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.json');
+  const codexConfigPath = path.join(root, 'codex.toml');
+  fs.writeFileSync(configPath, JSON.stringify({ port: 17841, releaseVersion: '2.0.0', mode: 'full', browserHost: 'launcher' }));
+  fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:10100/v1"\n');
+  const status = await webGptStatus({
+    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
+    fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0', active_browser_turns: 0 }) })
+  });
+  assert.equal(status.healthy, true);
+  assert.equal(status.routeActive, false);
+  assert.equal(status.state, 'attention');
+  assert.equal(status.modelCount, 8);
+  assert.ok(status.modelLabels.includes('Web / 임시 / 매우 높음'));
+  assert.equal(status.modelLabels.some(label => label.endsWith('/ Pro')), false);
+  assert.equal(status.localHarnessConsumesModelTokens, false);
 });
 
 test('OCX account adapter exposes only safe account metadata', async () => {

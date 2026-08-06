@@ -15,10 +15,12 @@
         <a class="nav-link active" href="#home"><span aria-hidden="true">⌂</span>홈</a>
         <a class="nav-link" href="#tools"><span aria-hidden="true">⌕</span>모든 도구</a>
         <a class="nav-link" href="#accounts"><span aria-hidden="true">◎</span>계정</a>
+        <a class="nav-link" href="#web-gpt"><span aria-hidden="true">W</span>Web GPT</a>
+        <a class="nav-link" href="#workspace"><span aria-hidden="true">M</span>Workspace</a>
         <a class="nav-link" href="#controls"><span aria-hidden="true">◇</span>연결 제어</a>
         <a class="nav-link" href="#system"><span aria-hidden="true">◌</span>시스템</a>
       </nav>
-      <div class="local-note"><span class="status-dot"></span><span><strong>이 컴퓨터에서만 실행</strong><small>외부 네트워크에 공개되지 않음</small></span></div>
+      <div class="local-note"><span class="status-dot"></span><span><strong>대시보드는 로컬 전용</strong><small>외부 작업은 Secure Tunnel 사용</small></span></div>
     </aside>
 
     <main id="mainContent">
@@ -40,6 +42,15 @@
         <span id="updatedAt" class="updated-at"></span>
       </section>
 
+      <section class="operations-overview" aria-labelledby="operationsTitle">
+        <div class="section-title compact"><div><p class="eyebrow">LIVE ROUTES</p><h2 id="operationsTitle">현재 작업 경로</h2></div><span>각 경로의 추론·도구·연결 역할을 분리</span></div>
+        <div class="route-grid">
+          <article class="route-card" data-route-card="web-gpt"><div><span class="route-badge web">W</span><span><strong>Web GPT</strong><small>ChatGPT Web 추론</small></span></div><b id="webGptRouteState">확인 중</b><p id="webGptRouteDetail">모델 브리지 상태를 읽고 있습니다.</p></article>
+          <article class="route-card" data-route-card="ocx"><div><span class="route-badge ocx">O</span><span><strong>OCX</strong><small>선택형 모델 라우팅</small></span></div><b id="ocxRouteState">확인 중</b><p id="ocxRouteDetail">OCX 상태를 읽고 있습니다.</p></article>
+          <article class="route-card" data-route-card="workspace"><div><span class="route-badge workspace">M</span><span><strong>AICC Workspace</strong><small>외부 ChatGPT ↔ 로컬 도구</small></span></div><b id="workspaceRouteState">확인 중</b><p id="workspaceRouteDetail">Secure Tunnel 상태를 읽고 있습니다.</p></article>
+        </div>
+      </section>
+
       <section aria-labelledby="quickTitle">
         <div class="section-title"><div><p class="eyebrow">QUICK START</p><h2 id="quickTitle">자주 쓰는 기능</h2></div><a href="#tools">모두 보기</a></div>
         <div id="quickTools" class="quick-grid" aria-live="polite"></div>
@@ -49,6 +60,67 @@
         <div class="section-title"><div><p class="eyebrow">TOOL LIBRARY</p><h2 id="toolsTitle">모든 도구</h2></div><span>하나의 목록에서 찾고 실행</span></div>
         <div id="toolFilters" class="filter-row" role="group" aria-label="도구 분류"></div>
         <div id="toolLibrary" class="tool-library" aria-live="polite"></div>
+      </section>
+
+      <section id="web-gpt" class="anchor-section" aria-labelledby="webGptTitle">
+        <div class="section-title"><div><p class="eyebrow">CHATGPT WEB MODELS</p><h2 id="webGptTitle">Web GPT 모델 운영</h2></div><span>추론은 ChatGPT Web · 실행은 현재 Codex 하네스</span></div>
+        <div class="web-gpt-layout">
+          <article class="panel web-gpt-control">
+            <div class="web-gpt-heading"><span id="webGptIndicator" class="large-status offline"></span><div><h3>Codex 모델 브리지</h3><p id="webGptDetail">Web GPT 상태 확인 중</p></div></div>
+            <dl class="metric-list">
+              <div><dt>버전</dt><dd id="webGptVersion">–</dd></div>
+              <div><dt>실행 모드</dt><dd id="webGptMode">–</dd></div>
+              <div><dt>활성 브라우저 턴</dt><dd id="webGptTurns">–</dd></div>
+              <div><dt>모델 추론 토큰</dt><dd>ChatGPT Web만 사용</dd></div>
+            </dl>
+            <div class="button-row"><button id="openWebGpt" type="button">Codex Web GPT 열기</button><button id="refreshWebGpt" type="button" class="secondary">상태 새로 확인</button></div>
+          </article>
+          <article class="panel model-surface">
+            <div class="panel-title"><div><p class="eyebrow">MODEL PICKER</p><h3>노출 예정 모델</h3></div><span id="webGptModelCount" class="capability">0개</span></div>
+            <div id="webGptModels" class="model-chip-list"><span class="empty">상태를 확인하고 있습니다.</span></div>
+            <p class="panel-footnote">Web GPT 모델을 선택한 요청은 OCX 모델 추론을 호출하지 않습니다. Codex Desktop은 화면·도구·승인 하네스만 담당합니다.</p>
+          </article>
+        </div>
+        <article class="panel route-topology" aria-labelledby="routeTopologyTitle">
+          <div class="panel-title"><div><p class="eyebrow">ROUTING MAP</p><h3 id="routeTopologyTitle">서로 독립된 세 가지 모델 경로</h3></div><span class="capability">한 선택기에 통합</span></div>
+          <div class="topology-list">
+            <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>Web GPT</strong><small>ChatGPT Web만 추론</small></div>
+            <div><span class="topology-source">Codex Desktop</span><span class="topology-arrow">→</span><span class="topology-port">17841</span><span class="topology-arrow">→</span><strong>OCX 10100</strong><small>Web 외 모델만 전달</small></div>
+            <div><span class="topology-source">codex-native 프로필</span><span class="topology-arrow">→</span><strong>OpenAI 네이티브</strong><small>브리지 장애 시 독립 복구 경로</small></div>
+          </div>
+        </article>
+      </section>
+
+      <section id="workspace" class="anchor-section" aria-labelledby="workspaceTitle">
+        <div class="section-title"><div><p class="eyebrow">REMOTE LOCAL WORKSPACE</p><h2 id="workspaceTitle">AICC Workspace 운영</h2></div><span>ChatGPT Business에서 이 Mac의 등록 프로젝트 사용</span></div>
+        <div class="workspace-layout">
+          <article class="panel workspace-runtime">
+            <div class="web-gpt-heading"><span id="workspaceIndicator" class="large-status offline"></span><div><h3>Secure MCP Tunnel</h3><p id="workspaceDetail">AICC Workspace 상태 확인 중</p></div></div>
+            <dl class="metric-list">
+              <div><dt>등록 프로젝트</dt><dd id="workspaceCount">–</dd></div>
+              <div><dt>터널</dt><dd id="workspaceTunnel">–</dd></div>
+              <div><dt>파일 권한</dt><dd id="workspaceFilePermission">–</dd></div>
+              <div><dt>명령 실행</dt><dd id="workspaceCommandPermission">–</dd></div>
+              <div><dt>모델 추론</dt><dd>ChatGPT Web</dd></div>
+            </dl>
+            <p class="panel-footnote">Mac과 로컬 MCP·Tunnel이 실행 중이면 외부 네트워크의 ChatGPT 웹에서도 사용할 수 있습니다. 로컬 포트를 인터넷에 직접 공개하지 않습니다.</p>
+          </article>
+          <article class="panel workspace-publish">
+            <div class="panel-title"><div><p class="eyebrow">BUSINESS APP SNAPSHOT</p><h3>도구 게시 상태</h3></div><span id="workspacePublishState" class="capability">확인 중</span></div>
+            <div class="publish-metrics">
+              <div><span>전체</span><strong id="workspaceToolCount">–</strong></div>
+              <div><span>읽기</span><strong id="workspaceReadToolCount">–</strong></div>
+              <div><span>쓰기</span><strong id="workspaceWriteToolCount">–</strong></div>
+            </div>
+            <p id="workspacePublishDetail" class="panel-footnote">로컬 도구 스냅샷을 확인하고 있습니다.</p>
+            <div class="button-row"><button id="workspacePreflight" type="button">게시 사전검사</button><a id="openChatGptApps" class="button-link secondary" href="https://chatgpt.com/admin/apps" target="_blank" rel="noopener">ChatGPT 앱 관리</a></div>
+          </article>
+        </div>
+        <article class="panel workspace-tools-panel">
+          <div class="panel-title"><div><p class="eyebrow">EXPOSED TOOLS</p><h3>ChatGPT에 제공되는 로컬 도구</h3></div><span id="workspaceToolSummary" class="capability">0개</span></div>
+          <div id="workspaceTools" class="workspace-tool-grid"><span class="empty">상태를 확인하고 있습니다.</span></div>
+          <p class="panel-footnote">모든 파일·명령 작업은 먼저 연 워크스페이스 경계 안에서만 수행됩니다. 임의의 로컬 절대 경로는 열 수 없습니다.</p>
+        </article>
       </section>
 
       <section id="accounts" class="anchor-section" aria-labelledby="accountsTitle">

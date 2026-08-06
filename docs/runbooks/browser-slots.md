@@ -18,7 +18,7 @@
 ## 1. 저장소 체크아웃
 
 ```bash
-git clone https://github.com/AgenticLab-SH/ai-control-center.git
+git clone https://github.com/AgenticLab-SH/AICC.git
 ```
 
 체크아웃 루트를 이후 단계에서 `<aicc>`로 표기한다. 설치 위치는 자유지만 개인

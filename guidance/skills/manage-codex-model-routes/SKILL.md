@@ -1,79 +1,75 @@
 ---
 name: manage-codex-model-routes
-description: "Safely inspect, update, switch, or recover this Mac's two Codex model paths: native Codex and the OpenCodex (OCX) proxy on 10100. Use for provider, catalog, port, route, OCX upgrade, startup repair, or disconnect recovery. Preserve active Codex tasks and non-target providers. Not for ordinary model use, quota-only reports, Web ChatGPT local editing, or general MCP servers."
+description: "Safely inspect, install, switch, or recover this Mac's three Codex model paths: native Codex, the AICC Codex Web GPT bridge on 17841, and OpenCodex (OCX) on 10100. Use for provider, catalog, port, Web GPT model picker, OCX upgrade, startup repair, or disconnect recovery. Preserve active Codex tasks and non-target routes. Not for ordinary model use, quota-only reports, AICC Workspace publishing, or general MCP servers."
 ---
 
 # Codex 모델 경로 안전 관리
 
-모델 경로는 두 개뿐이다. Web ChatGPT의 로컬 편집은 모델 provider가 아니라 별도
-`AICC Workspace MCP`가 담당하므로 이 스킬에서 제3의 endpoint, provider 또는 모델
-카탈로그를 만들거나 복구하지 않는다.
-
 ## 경로 계약
 
-| 경로 | endpoint | 소유자 | 역할 |
+| 경로 | endpoint | 추론 소유자 | 역할 |
 |---|---|---|---|
-| Native Codex | 공식 Codex endpoint | Codex | OCX 장애 시 독립 복구 경로 |
-| OCX | `http://127.0.0.1:10100/v1` | OpenCodex | 기본 Desktop 경로와 provider 라우팅 |
+| Native Codex | 공식 Codex endpoint | OpenAI Codex | OCX·Web GPT와 독립된 복구 profile |
+| Codex Web GPT | `http://127.0.0.1:17841/v1` | ChatGPT Web | `chatgpt-web/*` 모델과 현재 Codex 도구 하네스 |
+| OCX | `http://127.0.0.1:10100/v1` | 선택한 OCX provider | Web GPT가 아닌 Desktop 모델의 upstream |
 
-기본 Codex Desktop은 OCX 10100을 사용한다. 무접두어 OpenAI 모델도 기본 Desktop에서는
-OCX의 `openai` provider를 통과하므로 OCX 프로세스에 의존한다. 진짜 Native는
-`codex-native.config.toml`을 사용하는 CLI profile 또는 Desktop 전체 복구로만 사용한다.
-모델 목록에 가짜 Native 항목을 삽입하지 않는다.
+Codex 프로세스 하나는 `openai_base_url` 하나만 사용한다. 통합 모델 선택기가 필요할 때
+Desktop의 앞단은 17841이고, 브리지는 요청 모델을 기준으로 다음처럼 분기한다.
+
+```text
+chatgpt-web/* -> ChatGPT Web 브라우저 추론
+그 밖의 모델 -> OCX 10100으로 원문 전달
+codex-native profile -> 공식 Codex endpoint 직결
+```
+
+Web GPT 요청은 OCX 모델 추론을 호출하지 않는다. OCX가 중지돼도 Web GPT 분기는 계속
+동작해야 한다. 다만 17841 자체가 중지되면 그 endpoint를 사용하는 Desktop 요청 전체가
+실패하므로 로그인 자동 실행과 런처 supervisor를 유지한다.
 
 ## 활성 작업 보호
 
-1. 가장 가까운 저장소 지시와 Git 상태를 확인한다.
-2. 비밀을 가리고 다음을 확인한다.
-   - 현재 Codex `openai_base_url`, model catalog와 profile
-   - `ocx status`, `ocx health`, `ocx system status --json`의 활성 turn 수
-   - 10100 `/healthz`, provider 목록과 선택 provider
-3. 설정, catalog와 서비스 상태를 소유자 전용 복구 폴더에 백업한다.
-4. 현재 작업이 10100을 사용하거나 OCX 활성 turn 수가 0보다 크면 `ocx stop`, `restart`,
-   `restore`, `restore back`, `sync --restart-codex`, 서비스 재설치를 실행하지 않는다.
-5. provider나 custom model만 바꾸는 경우 OCX의 live 관리 CLI/API를 우선하고, 비대상
-   provider와 default provider가 그대로인지 검증한다.
-6. 변경 뒤 10100 health, 현재 provider, catalog 정합성과 작은 read-only 요청을 확인한다.
-   필요한 재시작은 활성 turn이 0이 된 뒤에만 수행한다.
+1. 현재 Codex `openai_base_url`, route journal, Web GPT config, OCX catalog를 비밀 없이 확인한다.
+2. 17841 `/healthz`의 `active_http_turns`, `active_browser_turns`와 10100 health·활성 turn을 확인한다.
+3. 설정과 catalog를 소유자 전용 복구 폴더에 백업한다.
+4. 활성 turn이 있는 경로는 stop, restart, restore, route 교체 또는 서비스 재설치를 하지 않는다.
+5. Web GPT만 변경할 때 OCX 프로세스·provider·계정을 바꾸지 않는다. OCX만 변경할 때 Web GPT
+   로그인·Tunnel·브라우저 profile을 바꾸지 않는다.
+6. 변경 뒤 두 loopback health, 모델 catalog 병합, route journal과 작은 read-only 요청을 확인한다.
+
+## Web GPT 모델 계약
+
+- 표시 이름은 `Web / 임시|저장 / 낮음|중간|높음|매우 높음`을 사용한다.
+- Pro 권한이 검증된 경우에만 `Web / 임시|저장 / Pro`를 추가한다.
+- 매우 높음은 Pro 전용이 아니다.
+- 임시·저장과 추론 수준은 하나의 모델 slug에 함께 고정한다.
+- `full` 모드에서는 현재 Codex turn이 광고한 Browser·Chrome·Computer Use·MCP·터미널 도구를
+  outer Codex 도구 gateway로 호출한다. 추론은 계속 ChatGPT Web만 담당한다.
+- Web GPT는 현재 Codex 작업의 검증된 workspace 경계를 넘지 못하게 축소한다.
 
 ## Native 복구
 
-OCX 장애 시 Desktop 전체를 Native로 돌리는 표준 명령은 `ocx restore`다. 실행 중인
-Codex task에서는 직접 실행하지 말고 사용자가 안전한 새 시점에 수행하도록 안내한다.
-설정 복구 뒤에는 Desktop을 완전히 종료하고 다시 열어야 기존 프로세스가 들고 있던
-설정이 사라진다.
+Native는 `codex-native.config.toml` profile로 항상 보존한다. 먼저 설치된 Codex help/schema와
+작은 read-only smoke로 profile을 검증한다. Desktop 모델 선택기는 endpoint 전환기가 아니므로
+Native를 가짜 모델 항목으로 주입하지 않는다.
 
-OCX로 돌아갈 때는 먼저 10100 health를 확인하고 `ocx restore back`을 실행한 뒤 Desktop을
-다시 연다. `restore`와 `restore back` 모두 현재 대화를 끊을 수 있으므로 에이전트가 활성
-task 안에서 자동 실행하지 않는다.
+Desktop 전체를 OCX 경유에서 Native로 복구하는 `ocx restore`, 돌아가는 `ocx restore back`,
+`ocx sync --restart-codex`는 현재 대화를 끊을 수 있다. 활성 작업 안에서 자동 실행하지 말고
+안전한 재시작 시점에만 사용한다.
 
-## 독립 profile
+## AICC Workspace와의 경계
 
-Codex profile은 `$CODEX_HOME/<name>.config.toml` 레이어다.
-
-- `codex-native.config.toml`: 공식 endpoint와 Native 모델
-- 기본 `config.toml`: 10100과 OCX catalog
-
-profile을 변경하기 전에 설치된 Codex help/schema를 확인하고 `codex debug models -p
-codex-native` 또는 작은 read-only smoke로 실제 덮어쓰기를 검증한다. 현재 Codex Desktop의
-모델 선택기는 모델별 endpoint 전환기가 아니므로 Native가 선택 항목으로 보인다고 주장하지
-않는다.
-
-## AICC Workspace MCP와의 경계
-
-ChatGPT Business에서 로컬 파일·명령·AICC 스킬을 사용하는 경로는 다음과 같다.
+외부 ChatGPT에서 등록 프로젝트를 직접 다루는 경로는 모델 provider가 아니다.
 
 ```text
-ChatGPT Web -> OpenAI Secure MCP Tunnel -> AICC Workspace MCP -> 등록 워크스페이스
+ChatGPT Web -> Secure MCP Tunnel -> AICC Workspace -> 등록 워크스페이스
 ```
 
-이 경로는 OCX 10100과 독립적이다. Tunnel이나 Workspace MCP를 관리할 때 OCX 설정과
-catalog를 바꾸지 않는다. 반대로 OCX를 관리할 때 Tunnel profile, runtime key, ChatGPT
-connector를 바꾸지 않는다.
+이 경로의 게시·Tunnel·도구 snapshot을 바꿀 때 17841 또는 10100 모델 route를 바꾸지 않는다.
+반대로 모델 route를 관리할 때 AICC Workspace 앱 게시 상태를 바꾸지 않는다.
 
 ## 실패와 롤백
 
-- health 실패를 다른 provider, 계정 또는 profile로 조용히 우회하지 않는다.
-- 변경한 한 경로만 백업에서 복원하고 비대상 provider는 그대로 둔다.
-- provider 제거 전에 해당 provider의 활성 요청이 없는지 확인한다.
-- 활성 task가 있는 상태에서 재시작만 남으면 중단 이유와 안전한 다음 시점을 보고한다.
+- 실패를 다른 provider·계정·profile로 조용히 우회하지 않는다.
+- 변경한 경로만 journal 또는 백업에서 복원한다.
+- 브리지와 OCX를 동시에 재시작하지 않는다.
+- 활성 작업 때문에 재시작만 남으면 정확한 남은 단계와 안전한 실행 시점을 보고한다.

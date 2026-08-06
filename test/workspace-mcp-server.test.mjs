@@ -12,6 +12,7 @@ import {
   sandboxProfile,
   __testing
 } from '../components/workspace-mcp/server.mjs';
+import { WORKSPACE_MCP_TOOLS } from '../components/workspace-mcp/tool-manifest.mjs';
 
 function fixture(t) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-mcp-server-'));
@@ -67,14 +68,7 @@ test('fixed MCP surface opens only aliases and can read and inspect changes', as
   const client = await clientFor(t, config(paths.workspace), paths.runtime);
   const listed = await client.listTools();
   const names = listed.tools.map(tool => tool.name).sort();
-  assert.deepEqual(names, [
-    'aicc_codex_task_archive', 'aicc_codex_task_create',
-    'aicc_codex_task_list', 'aicc_codex_task_message', 'aicc_codex_task_read',
-    'aicc_skill_inventory', 'aicc_skill_read', 'aicc_workspace_apply_patch',
-    'aicc_workspace_changes', 'aicc_workspace_exec', 'aicc_workspace_list',
-    'aicc_workspace_open', 'aicc_workspace_read', 'aicc_workspace_search',
-    'aicc_workspace_write_stdin'
-  ].sort());
+  assert.deepEqual(names, WORKSPACE_MCP_TOOLS.map(tool => tool.name).sort());
   const rejected = await client.callTool({ name: 'aicc_workspace_open', arguments: { alias: '/tmp' } });
   assert.equal(rejected.isError, true);
   const opened = await client.callTool({ name: 'aicc_workspace_open', arguments: { alias: 'fixture' } });
@@ -83,6 +77,10 @@ test('fixed MCP surface opens only aliases and can read and inspect changes', as
   assert.match(binding.lease, /^lease_/);
   const read = await client.callTool({ name: 'aicc_workspace_read', arguments: { workspace_id: binding.workspace_id, lease: binding.lease, path: 'README.md' } });
   assert.equal(payload(read).text, '# fixture\n');
+  const many = await client.callTool({ name: 'aicc_workspace_read_many', arguments: { workspace_id: binding.workspace_id, lease: binding.lease, paths: ['README.md'] } });
+  assert.equal(payload(many).files[0].text, '# fixture\n');
+  const info = await client.callTool({ name: 'aicc_workspace_info', arguments: { workspace_id: binding.workspace_id, lease: binding.lease } });
+  assert.equal(payload(info).alias, 'fixture');
   const secret = await client.callTool({ name: 'aicc_workspace_read', arguments: { workspace_id: binding.workspace_id, lease: binding.lease, path: '.env' } });
   assert.equal(secret.isError, true);
 
