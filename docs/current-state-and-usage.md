@@ -71,9 +71,11 @@ Web GPT, Workspace MCP, 브라우저와 지침 상태를 한 화면에서 읽는
 - `Web / 저장 / 낮음|중간|높음|매우 높음`
 
 계정에 Pro가 실제로 노출되고 사용자가 명시 승인한 경우에만 임시·저장 Pro를
-추가한다. `매우 높음`은 Pro 전용이 아니다. Web 모델을 선택해도 Codex Desktop은
-현재 프로젝트, 파일 패치, 터미널, 승인과 도구 호출을 담당하며 모델 추론만 ChatGPT
-Web에서 수행된다.
+추가한다. `매우 높음`은 Pro 전용이 아니다. 브라우저 전용 모드에서도 현재 Codex
+대화 문맥과 이미지는 전달되지만 로컬 파일, 터미널과 Codex 도구 호출은 노출되지
+않는다. 별도 MCP Tunnel과 ChatGPT 커넥터를 구성해 전체 하네스 모드로 전환한 뒤에만
+Codex Desktop이 현재 프로젝트, 파일 패치, 터미널, 승인과 도구 호출을 담당하고 모델
+추론만 ChatGPT Web에서 수행한다.
 
 현재 v2 전송 방식은 **Codex turn마다 새 ChatGPT 대화**를 열고, 해당 Codex 작업의
 누적·압축된 문맥을 다시 전달한다. 저장 모드는 각 turn의 대화가 ChatGPT 기록에
@@ -85,7 +87,7 @@ Web에서 수행된다.
 packet 안에서 필요한 범위로 매 turn 전달된다. 숨은 인증 자료나 임의의 agent home
 전체를 복사하지 않는다. 압축 뒤에는 Codex가 보존한 요약 문맥이 전달된다.
 
-### Web 모델에서 쓸 수 있는 기능
+### 전체 하네스 모드에서 Web 모델이 쓸 수 있는 기능
 
 - 현재 Codex 작업이 광고한 파일·터미널·MCP·skills 도구
 - allowlist에 포함된 Web 검색, Browser, Chrome, Computer Use, 이미지 생성과 정확히
