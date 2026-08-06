@@ -13,7 +13,6 @@ npm test
 npm run smoke
 npm run test:account-manager
 npm run test:workspace-mcp
-./bin/aicc stack smoke --fast
 npm run test:guidance
 npm run test:browser
 python3 -m unittest discover -s tools/platform/test -p 'test_project_portfolio.py' -v

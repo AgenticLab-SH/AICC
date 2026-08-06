@@ -12,6 +12,7 @@ $commands = @(
     @{ name='deployment-policy'; path='tools/platform/test/Test-AgentHomeDeploymentPolicy.ps1' },
     @{ name='directives'; path='tools/platform/test/Test-AgentHomeDirectives.ps1' },
     @{ name='skills'; path='tools/platform/inspect/Inspect-AgentSkills.ps1' },
+    @{ name='guidance-sources'; path='tools/platform/inspect/Inspect-GuidanceSources.ps1' },
     @{ name='agents'; path='tools/platform/test/Test-CodexAgentDeployment.ps1' }
 )
 $results = @()
