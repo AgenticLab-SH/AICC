@@ -35,12 +35,16 @@ function defaultWebGptCli() {
   return '/Applications/Codex Web GPT.app/Contents/Resources/runtime/bin/codex-chatgpt-web';
 }
 
-async function health(fetcher, url) {
-  try {
-    const response = await fetcher(url, { signal: AbortSignal.timeout(2_500) });
-    if (!response.ok) return null;
-    return sanitize(await response.json());
-  } catch { return null; }
+async function health(fetcher, url, options = {}) {
+  const attempts = Math.max(1, Number(options.attempts ?? 2));
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      const response = await fetcher(url, { signal: AbortSignal.timeout(options.timeoutMs ?? 2_500) });
+      if (response.ok) return sanitize(await response.json());
+    } catch { /* retry one cold-start timeout before declaring the route offline */ }
+    if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, options.delayMs ?? 200));
+  }
+  return null;
 }
 
 export async function codexRouteStatus(options = {}) {
@@ -55,10 +59,15 @@ export async function codexRouteStatus(options = {}) {
   const runner = options.runCommand ?? runCommand;
   const webGptCli = options.webGptCli ?? defaultWebGptCli();
   const fetcher = options.fetch ?? fetch;
+  const healthOptions = {
+    attempts: options.healthAttempts ?? 2,
+    timeoutMs: options.healthTimeoutMs ?? 2_500,
+    delayMs: options.healthRetryDelayMs ?? 200
+  };
   const [routeResult, webGptHealth, ocxHealth] = await Promise.all([
     runner(webGptCli, ['route', 'status'], { timeoutMs: 5_000 }).catch(() => null),
-    health(fetcher, 'http://127.0.0.1:17841/healthz'),
-    health(fetcher, 'http://127.0.0.1:10100/healthz')
+    health(fetcher, 'http://127.0.0.1:17841/healthz', healthOptions),
+    health(fetcher, 'http://127.0.0.1:10100/healthz', healthOptions)
   ]);
   const route = jsonResult(routeResult);
   const kind = routeKind(routeUrl);
