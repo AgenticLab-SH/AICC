@@ -46,7 +46,7 @@ function command(commandName, args = []) {
 function namesAt(root) {
   if (!fs.existsSync(root)) return [];
   return fs.readdirSync(root, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() || entry.isSymbolicLink() || entry.isFile())
+    .filter(entry => !entry.name.startsWith('.') && (entry.isDirectory() || entry.isSymbolicLink() || entry.isFile()))
     .map(entry => entry.isFile() ? entry.name.replace(/\.[^.]+$/, '') : entry.name).sort();
 }
 
@@ -61,7 +61,9 @@ if (coordination) write('profile/aicc/coordination.portable.toml', portableText(
 const workspaceConfigFile = path.join(home, '.ai-control-center', 'workspace-mcp', 'config.json');
 if (fs.existsSync(workspaceConfigFile)) {
   const workspaceConfig = sanitize(JSON.parse(fs.readFileSync(workspaceConfigFile, 'utf8')));
-  const portable = JSON.stringify(workspaceConfig, null, 2).replaceAll(home, '${HOME}');
+  const portable = JSON.stringify(workspaceConfig, null, 2)
+    .replaceAll(projectRoot, '${HOME}/dev/projects/tools/AICC')
+    .replaceAll(home, '${HOME}');
   write('profile/aicc/workspace-mcp.portable.json', portable);
 }
 
