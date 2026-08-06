@@ -25,15 +25,18 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 
 8개 모두 같은 최소 프롬프트와 `정상`만 출력하는 응답 계약을 사용했고 도구는
 광고하지 않은 추론 smoke였다. 따라서 이 결과는 Web GPT 추론 경로 8/8 성공의
-증거이며 로컬 편집 성공 증거는 아니다. 로컬 패치·테스트는 Full 하네스와
-`Web GPT 작업 하네스` ChatGPT 커넥터를 모두 검증한 뒤 다시 실행한다.
+증거다. 이어서 Full 하네스와 `Web GPT 작업 하네스` ChatGPT 커넥터를 연결한 뒤
+격리 프로젝트에서 `Web / 임시 / 높음`으로 실제 파일 패치, 터미널 명령과 테스트를
+검증했다. `src/status.js`를 Web 모델이 직접 수정했고 `npm test` 1/1 통과까지
+85.08초가 걸렸다. 이 시험에서는 OCX나 네이티브 모델 추론을 사용하지 않았다.
 - OpenAI Tunnel은 역할별로 분리한다. `AICC 원격 작업공간 MCP`는 외부 ChatGPT용이고,
   `Web GPT 작업 하네스 MCP`는 Codex Desktop Web 모델의 전체 하네스용이다. 기존 Workspace
   Tunnel을 전체 하네스에 재사용하지 않는다.
 - 전체 하네스의 실시간 완료 여부는 스냅샷 문구가 아니라
   `aicc web-gpt status --json`의 `harnessReady`와 `aicc web-gpt doctor --json`으로
-  판정한다. `connectorVerification=chatgpt-required`면 ChatGPT에서 커넥터를 1회
-  검증해야 한다.
+  판정한다. 현재 커넥터 이름은 `Web GPT 작업 하네스`이며
+  `connectorVerification=verified`까지 확인했다. 새 ChatGPT 세션에서 앱 연결
+  확인이 다시 보이면 해당 세션에만 명시적으로 허용한다.
 
 실시간 상태는 다음 명령으로 다시 확인한다.
 

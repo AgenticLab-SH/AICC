@@ -143,6 +143,34 @@ test('Web GPT adapter reports attention when full harness tunnel is not ready', 
   assert.match(status.detail, /아직 준비되지/);
 });
 
+test('Web GPT adapter reads the launcher-owned tunnel health endpoint without spawning the CLI', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-web-gpt-tunnel-health-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.json');
+  const codexConfigPath = path.join(root, 'codex.toml');
+  const launcherStatePath = path.join(root, 'launcher-state.json');
+  const tunnelHealthUrlFile = path.join(root, 'tunnel-health.url');
+  fs.writeFileSync(configPath, JSON.stringify({
+    port: 17841, releaseVersion: '2.0.0', mode: 'full', appName: 'Web GPT 작업 하네스',
+    tunnel: { alias: 'codex-chatgpt-web' }
+  }));
+  fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
+  fs.writeFileSync(launcherStatePath, JSON.stringify({ mcpSetupComplete: true }));
+  fs.writeFileSync(tunnelHealthUrlFile, 'http://127.0.0.1:54321\n');
+  const status = await webGptStatus({
+    configPath, codexConfigPath, launcherStatePath, tunnelHealthUrlFile,
+    appPath: path.join(root, 'missing.app'),
+    fetch: async url => String(url).includes(':17841')
+      ? { ok: true, json: async () => ({ status: 'ok', version: '2.0.0', mode: 'full' }) }
+      : { ok: true, text: async () => 'live' }
+  });
+  assert.equal(status.state, 'ready');
+  assert.equal(status.harnessReady, true);
+  assert.deepEqual(status.tunnelRuntime, {
+    running: true, healthy: true, ready: true, state: 'ready'
+  });
+});
+
 test('OCX account adapter exposes only safe account metadata', async () => {
   const status = await ocxAccountStatus({
     executable: 'ocx-fixture',

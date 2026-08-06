@@ -13,6 +13,13 @@ test('dashboard architecture map separates the two MCP tunnel roles', () => {
   assert.match(html, /이전 이름: Codex Native MCP · 네이티브 모델과 무관/);
 });
 
+test('dashboard records the completed Web GPT full-harness edit proof', () => {
+  assert.match(html, /비-Pro 8개 추론 \+ Full 로컬 작업/);
+  assert.match(html, /로컬 작업 성공 · 85\.08초/);
+  assert.match(html, /파일 패치 → 터미널 → `npm test` 1\/1 통과/);
+  assert.doesNotMatch(html, /로컬 편집은 아직 미검증/);
+});
+
 test('source lineage distinguishes runtime dependencies from reference-only sources', () => {
   assert.match(html, /<span class="source-tag fork">Fork<\/span>/);
   assert.match(html, /<span class="source-tag pinned">Pinned submodule<\/span>/);
@@ -40,9 +47,12 @@ test('downloadable JSON Canvas has valid node and edge references', () => {
   }
 });
 
-test('Web GPT full cutover stages away from the active Codex route before returning to it', () => {
-  assert.match(cutover, /stagingPortFor/);
-  assert.match(cutover, /'--port', String\(stagingPort\)/);
-  assert.match(cutover, /atomicJson\(configFile, \{ \.\.\.fullConfig, port \}\)/);
-  assert.ok(cutover.indexOf("'--port', String(stagingPort)") < cutover.indexOf('terminate(originalPid)'));
+test('Web GPT full cutover uses the launcher transaction after an idle drain', () => {
+  assert.match(cutover, /waitForIdleAndDrain/);
+  assert.match(cutover, /window\.codexWebLauncher\.setupMcp/);
+  assert.match(cutover, /Web GPT 작업 하네스/);
+  assert.match(cutover, /await data\.text\(\)/);
+  assert.match(cutover, /launcherTransactionalRollback/);
+  assert.doesNotMatch(cutover, /process\.kill/);
+  assert.doesNotMatch(cutover, /stagingPortFor/);
 });
