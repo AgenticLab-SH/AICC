@@ -109,6 +109,25 @@ test('OCX adapter verifies core health before running bounded detail probes', as
   assert.equal(detailMaximum, 2);
 });
 
+test('OCX adapter retries one timed-out core probe before reporting offline', async () => {
+  const calls = new Map();
+  const status = await ocxStatus({
+    executable: 'ocx-fixture',
+    coreRetryDelayMs: 0,
+    runCommand: async (_executable, args) => {
+      const key = args.join(' ');
+      calls.set(key, (calls.get(key) ?? 0) + 1);
+      if ((key === '--version' || key === 'health --json') && calls.get(key) === 1) return { ok: false, timedOut: true, stdout: '' };
+      if (key === '--version') return { ok: true, stdout: 'opencodex 2.10.0\n' };
+      if (key === 'health --json') return { ok: true, stdout: JSON.stringify({ ok: true, port: 10100 }) };
+      return { ok: true, stdout: '{}' };
+    }
+  });
+  assert.equal(status.state, 'ready');
+  assert.equal(calls.get('--version'), 2);
+  assert.equal(calls.get('health --json'), 2);
+});
+
 test('Codex route adapter separates native, Web GPT, and OCX recovery readiness', async () => {
   const files = new Map([
     ['/codex/config.toml', 'openai_base_url = "http://127.0.0.1:17841/v1"\n'],
@@ -132,6 +151,28 @@ test('Codex route adapter separates native, Web GPT, and OCX recovery readiness'
   assert.equal(status.nativeReady, true);
   assert.equal(status.webGpt.activeTurns, 3);
   assert.equal(status.ocx.healthy, true);
+});
+
+test('Codex route adapter retries transient loopback health failures', async () => {
+  const files = new Map([
+    ['/codex/config.toml', 'openai_base_url = "http://127.0.0.1:17841/v1"\n'],
+    ['/codex/native.toml', 'openai_base_url = "https://chatgpt.com/backend-api/codex"\n']
+  ]);
+  const calls = new Map();
+  const status = await codexRouteStatus({
+    configPath: '/codex/config.toml', nativeConfigPath: '/codex/native.toml', readFile: file => files.get(file),
+    webGptCli: 'web-gpt-fixture', healthRetryDelayMs: 0,
+    runCommand: async () => ({ ok: true, stdout: JSON.stringify({ installed: true, active: true }) }),
+    fetch: async url => {
+      const key = String(url);
+      calls.set(key, (calls.get(key) ?? 0) + 1);
+      if (calls.get(key) === 1) throw new Error('cold start');
+      return { ok: true, json: async () => key.includes('17841') ? { status: 'ok', accepting_turns: true } : { status: 'ok', port: 10100 } };
+    }
+  });
+  assert.equal(status.webGpt.healthy, true);
+  assert.equal(status.ocx.healthy, true);
+  assert.equal([...calls.values()].every(count => count === 2), true);
 });
 
 test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex route', async t => {
@@ -161,6 +202,26 @@ test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex rout
   assert.equal(status.tunnelRuntime.ready, true);
   assert.equal(status.connectorVerified, true);
   assert.equal(status.connectorVerification, 'verified');
+});
+
+test('Web GPT adapter retries one transient bridge health failure', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-web-gpt-retry-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.json');
+  const codexConfigPath = path.join(root, 'codex.toml');
+  fs.writeFileSync(configPath, JSON.stringify({ port: 17841, mode: 'browser-only' }));
+  fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
+  let calls = 0;
+  const status = await webGptStatus({
+    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'), healthRetryDelayMs: 0,
+    fetch: async () => {
+      calls += 1;
+      if (calls === 1) throw new Error('cold start');
+      return { ok: true, json: async () => ({ status: 'ok', mode: 'browser-only' }) };
+    }
+  });
+  assert.equal(status.healthy, true);
+  assert.equal(calls, 2);
 });
 
 test('Web GPT adapter does not claim local harness tools in browser-only mode', async t => {

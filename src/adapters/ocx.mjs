@@ -47,6 +47,18 @@ async function mapWithConcurrency(items, limit, operation) {
   return results;
 }
 
+async function runCoreProbe(runner, spec, options = {}) {
+  const attempts = Math.max(1, Number(options.attempts ?? 2));
+  let result = null;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try { result = await runner(spec.executable, spec.args, { timeoutMs: options.timeoutMs ?? 5_000 }); }
+    catch { result = null; }
+    if (result?.ok || (result && !result.timedOut)) return result;
+    if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, options.delayMs ?? 200));
+  }
+  return result;
+}
+
 function moduleState(payload, result) {
   if (payload) return 'ready';
   if (result?.timedOut) return 'timeout';
@@ -81,9 +93,14 @@ export async function ocxStatus(options = {}) {
     diagnostics: command(executable, ['system', 'diagnostics', '--json']),
     endpoints: command(executable, ['access', 'endpoints', '--json'])
   };
+  const coreOptions = {
+    attempts: options.coreAttempts ?? 2,
+    timeoutMs: options.timeoutMs ?? 5_000,
+    delayMs: options.coreRetryDelayMs ?? 200
+  };
   const [version, health] = await Promise.all([
-    runner(versionSpec.executable, versionSpec.args, { timeoutMs: options.timeoutMs ?? 5_000 }),
-    runner(healthSpec.executable, healthSpec.args, { timeoutMs: options.timeoutMs ?? 5_000 })
+    runCoreProbe(runner, versionSpec, coreOptions),
+    runCoreProbe(runner, healthSpec, coreOptions)
   ]);
   const readOnlyResults = await mapWithConcurrency(
     Object.values(readOnlySpecs),

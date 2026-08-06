@@ -36,15 +36,18 @@ async function defaultTunnelStatus(healthUrlFile, fetcher, timeoutMs) {
   } catch { return null; }
 }
 
-async function health(url, fetcher, timeoutMs) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    const response = await fetcher(url, { headers: { accept: 'application/json' }, signal: controller.signal });
-    if (!response.ok) return null;
-    return sanitize(await response.json());
-  } catch { return null; }
-  finally { clearTimeout(timer); }
+async function health(url, fetcher, timeoutMs, attempts = 2, delayMs = 200) {
+  for (let attempt = 0; attempt < Math.max(1, attempts); attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetcher(url, { headers: { accept: 'application/json' }, signal: controller.signal });
+      if (response.ok) return sanitize(await response.json());
+    } catch { /* retry one cold-start timeout before declaring the bridge offline */ }
+    finally { clearTimeout(timer); }
+    if (attempt + 1 < attempts) await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+  return null;
 }
 
 export async function webGptStatus(options = {}) {
@@ -59,7 +62,13 @@ export async function webGptStatus(options = {}) {
   const launcherState = readJson(launcherStatePath);
   const port = Number(config?.port || 17841);
   const baseUrl = `http://127.0.0.1:${port}/v1`;
-  const runtime = await health(`http://127.0.0.1:${port}/healthz`, options.fetch ?? fetch, options.timeoutMs ?? 2_500);
+  const runtime = await health(
+    `http://127.0.0.1:${port}/healthz`,
+    options.fetch ?? fetch,
+    options.timeoutMs ?? 2_500,
+    options.healthAttempts ?? 2,
+    options.healthRetryDelayMs ?? 200
+  );
   const installed = Boolean(config || fs.existsSync(appPath));
   const healthy = runtime?.status === 'ok' || runtime?.ok === true;
   const route = configuredRoute(codexConfigPath);
