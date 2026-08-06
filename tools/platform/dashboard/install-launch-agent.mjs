@@ -7,6 +7,18 @@ import { fileURLToPath } from 'node:url';
 
 const label = 'com.agenticlab.aicc-dashboard';
 
+function blockingPause(milliseconds) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function launchdMessage(result) {
+  return (result?.stderr || result?.stdout || '').trim();
+}
+
+function isTransientBootstrapFailure(result) {
+  return result?.status === 5 || /Bootstrap failed:\s*5|Input\/output error/i.test(launchdMessage(result));
+}
+
 function xml(value) {
   return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
@@ -36,6 +48,11 @@ export function installDashboardLaunchAgent(options = {}) {
   const root = options.root ?? path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../..');
   const node = options.node ?? process.execPath;
   const port = String(options.port ?? process.env.AICC_PORT ?? '4381');
+  const spawn = options.spawnSync ?? spawnSync;
+  const pause = options.pause ?? blockingPause;
+  const bootstrapAttempts = Math.max(1, Number(options.bootstrapAttempts ?? 6));
+  const uid = options.uid ?? (typeof process.getuid === 'function' ? process.getuid() : null);
+  if (!Number.isInteger(uid) || uid < 0) throw new Error('macOS 사용자 UID를 확인할 수 없습니다.');
   for (const required of [node, path.join(root, 'src', 'server.mjs'), path.join(root, 'package.json')]) {
     const stat = fs.lstatSync(required);
     if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`실제 일반 파일이 필요합니다: ${required}`);
@@ -48,17 +65,29 @@ export function installDashboardLaunchAgent(options = {}) {
   const plist = path.join(launchAgents, `${label}.plist`);
   const temporary = `${plist}.${process.pid}.tmp`;
   fs.writeFileSync(temporary, plistBody({ node, root, home, logs, port }), { encoding: 'utf8', mode: 0o600 });
-  const checked = spawnSync('plutil', ['-lint', temporary], { encoding: 'utf8' });
+  const checked = spawn('plutil', ['-lint', temporary], { encoding: 'utf8' });
   if (checked.status !== 0) {
     fs.rmSync(temporary, { force: true });
     throw new Error(`launchd 설정 검사가 실패했습니다: ${(checked.stderr || checked.stdout || '').trim()}`);
   }
   fs.renameSync(temporary, plist);
-  const domain = `gui/${process.getuid()}`;
-  spawnSync('launchctl', ['bootout', `${domain}/${label}`], { stdio: 'ignore' });
-  const loaded = spawnSync('launchctl', ['bootstrap', domain, plist], { encoding: 'utf8' });
-  if (loaded.status !== 0) throw new Error(`AICC Dashboard 자동 시작 등록에 실패했습니다: ${(loaded.stderr || '').trim()}`);
-  return { ok: true, label, plist, port: Number(port) };
+  const domain = `gui/${uid}`;
+  spawn('launchctl', ['bootout', `${domain}/${label}`], { stdio: 'ignore' });
+  let loaded = null;
+  let attempt = 0;
+  for (; attempt < bootstrapAttempts; attempt += 1) {
+    if (attempt > 0) pause(Math.min(1_000, 150 * (2 ** (attempt - 1))));
+    loaded = spawn('launchctl', ['bootstrap', domain, plist], { encoding: 'utf8' });
+    if (loaded.status === 0) break;
+    const alreadyRegistered = spawn('launchctl', ['print', `${domain}/${label}`], { stdio: 'ignore' });
+    if (alreadyRegistered.status === 0) break;
+    if (!isTransientBootstrapFailure(loaded)) break;
+  }
+  if (loaded?.status !== 0) {
+    const registered = spawn('launchctl', ['print', `${domain}/${label}`], { stdio: 'ignore' });
+    if (registered.status !== 0) throw new Error(`AICC Dashboard 자동 시작 등록에 실패했습니다: ${launchdMessage(loaded)}`);
+  }
+  return { ok: true, label, plist, port: Number(port), bootstrapAttempts: attempt + 1 };
 }
 
 if (path.resolve(process.argv[1] || '') === path.resolve(fileURLToPath(import.meta.url))) {
