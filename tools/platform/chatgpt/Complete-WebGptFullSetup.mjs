@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 
 function option(name, fallback = null) {
@@ -29,16 +29,11 @@ function atomicJson(file, value) {
   fs.chmodSync(file, 0o600);
 }
 
-function run(executable, args, timeout = 180_000) {
-  const result = spawnSync(executable, args, { encoding: 'utf8', timeout, windowsHide: true, maxBuffer: 4 * 1024 * 1024 });
-  if (result.error) throw result.error;
-  if (result.status !== 0) throw new Error(redact(result.stderr || result.stdout || `exit ${result.status}`));
-  return result.stdout;
-}
-
 async function health(port) {
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/healthz`, { signal: AbortSignal.timeout(2_000), cache: 'no-store' });
+    const response = await fetch(`http://127.0.0.1:${port}/healthz`, {
+      signal: AbortSignal.timeout(2_000), cache: 'no-store',
+    });
     if (!response.ok) return null;
     return await response.json();
   } catch { return null; }
@@ -46,7 +41,9 @@ async function health(port) {
 
 async function admin(port, token, action) {
   const response = await fetch(`http://127.0.0.1:${port}/admin/${action}`, {
-    method: 'POST', headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(5_000)
+    method: 'POST',
+    headers: { authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5_000),
   });
   if (!response.ok) throw new Error(`admin ${action} returned HTTP ${response.status}`);
   return response.json();
@@ -54,141 +51,238 @@ async function admin(port, token, action) {
 
 async function wait(ms) { await new Promise(resolve => setTimeout(resolve, ms)); }
 
-async function waitForMode(port, mode, oldPid, timeoutMs = 90_000) {
+function loopbackHttpEndpoint(value) {
+  const endpoint = new URL(value);
+  if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1') {
+    throw new Error('launcher browser endpoint is not loopback HTTP');
+  }
+  return endpoint;
+}
+
+async function launcherPage(descriptor) {
+  const endpoint = loopbackHttpEndpoint(descriptor.endpoint);
+  const response = await fetch(new URL('/json/list', endpoint), {
+    signal: AbortSignal.timeout(5_000), cache: 'no-store',
+  });
+  if (!response.ok) throw new Error(`launcher CDP discovery returned HTTP ${response.status}`);
+  const targets = await response.json();
+  const page = targets.find(target => target.type === 'page'
+    && typeof target.url === 'string'
+    && target.url.includes('/Codex%20Web%20GPT.app/Contents/Resources/'));
+  if (!page?.webSocketDebuggerUrl?.startsWith('ws://127.0.0.1:')) {
+    throw new Error('launcher renderer target is unavailable');
+  }
+  return page;
+}
+
+async function evaluate(page, expression, timeoutMs = 240_000) {
+  return await new Promise((resolve, reject) => {
+    const socket = new WebSocket(page.webSocketDebuggerUrl);
+    const timer = setTimeout(() => {
+      socket.close();
+      reject(new Error(`launcher IPC evaluation timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    const finish = (callback, value) => {
+      clearTimeout(timer);
+      try { socket.close(); } catch {}
+      callback(value);
+    };
+    socket.addEventListener('error', () => finish(reject, new Error('launcher CDP connection failed')));
+    socket.addEventListener('open', () => {
+      socket.send(JSON.stringify({
+        id: 1,
+        method: 'Runtime.evaluate',
+        params: { expression, awaitPromise: true, returnByValue: true, userGesture: false },
+      }));
+    });
+    socket.addEventListener('message', async event => {
+      let message;
+      try {
+        const data = event.data;
+        const raw = typeof data === 'string'
+          ? data
+          : typeof data?.text === 'function'
+            ? await data.text()
+            : Buffer.from(data).toString('utf8');
+        message = JSON.parse(raw);
+      } catch { return; }
+      if (message.id !== 1) return;
+      if (message.error) {
+        finish(reject, new Error(message.error.message || 'launcher CDP evaluation failed'));
+        return;
+      }
+      if (message.result?.exceptionDetails) {
+        const exception = message.result.exceptionDetails.exception?.description
+          || message.result.exceptionDetails.text
+          || 'launcher IPC invocation failed';
+        finish(reject, new Error(redact(exception)));
+        return;
+      }
+      finish(resolve, message.result?.result?.value);
+    });
+  });
+}
+
+async function waitForIdleAndDrain(port, controlToken, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const current = await health(port);
+    if (!current) {
+      await wait(2_000);
+      continue;
+    }
+    const drained = await admin(port, controlToken, 'drain');
+    if (drained.active_http_turns === 0 && drained.active_browser_turns === 0) return current;
+    await admin(port, controlToken, 'resume');
+    await wait(2_000);
+  }
+  throw new Error('bridge did not become atomically idle before timeout');
+}
+
+async function waitForFull(port, timeoutMs = 180_000) {
   const deadline = Date.now() + timeoutMs;
   let last = null;
   while (Date.now() < deadline) {
     last = await health(port);
-    if (last?.status === 'ok' && last.mode === mode && last.accepting_turns === true && last.pid !== oldPid) return last;
-    await wait(500);
+    if (last?.status === 'ok' && last.mode === 'full' && last.accepting_turns === true) return last;
+    await wait(1_000);
   }
-  throw new Error(`Responses proxy did not restart in ${mode} mode: ${redact(JSON.stringify(last))}`);
+  throw new Error(`Responses proxy did not become ready in full mode: ${redact(JSON.stringify(last))}`);
 }
 
-async function waitForStop(port, oldPid, timeoutMs = 60_000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const current = await health(port);
-    if (!current || current.pid !== oldPid) return current;
-    await wait(250);
+async function tunnelStatusFromHealth(urlFile, timeoutMs = 3_000) {
+  try {
+    const endpoint = loopbackHttpEndpoint(fs.readFileSync(urlFile, 'utf8').trim());
+    const response = await fetch(new URL('/healthz', endpoint), {
+      headers: { accept: 'text/plain' },
+      signal: AbortSignal.timeout(timeoutMs),
+      cache: 'no-store',
+    });
+    const ready = response.ok && (await response.text()).trim() === 'live';
+    return { runtime: { processRunning: ready, healthy: ready, ready, state: ready ? 'ready' : 'starting' } };
+  } catch {
+    return { runtime: { processRunning: false, healthy: false, ready: false, state: 'stopped' } };
   }
-  throw new Error(`Responses proxy pid ${String(oldPid)} did not release port ${String(port)}`);
-}
-
-function stagingPortFor(port) {
-  const candidate = port + 1;
-  if (!Number.isInteger(candidate) || candidate > 65_535) throw new Error('no safe staging port is available');
-  return candidate;
-}
-
-function terminate(pid) {
-  try { process.kill(pid, 'SIGTERM'); }
-  catch (error) { if (error?.code !== 'ESRCH') throw error; }
 }
 
 async function main() {
   const cli = required('--cli');
   const tunnelId = option('--tunnel-id');
   const runtimeKeyFile = required('--runtime-key-file');
-  const browserDescriptor = required('--browser-host-descriptor');
+  const browserDescriptorFile = required('--browser-host-descriptor');
   const configFile = required('--config');
   const backupConfig = required('--backup-config');
   const resultFile = required('--result-file');
   const timeoutMs = Number(option('--timeout-ms', '900000'));
+  const appName = option('--app-name', 'Web GPT 작업 하네스')?.trim();
   if (!/^tunnel_[a-f0-9]{32}$/.test(tunnelId ?? '')) throw new Error('invalid --tunnel-id');
-  for (const file of [cli, runtimeKeyFile, browserDescriptor, configFile, backupConfig]) {
+  if (!appName || appName.length > 80) throw new Error('invalid --app-name');
+  for (const file of [cli, runtimeKeyFile, browserDescriptorFile, configFile, backupConfig]) {
     if (!fs.existsSync(file)) throw new Error(`required file is missing: ${file}`);
   }
   const initial = JSON.parse(fs.readFileSync(configFile, 'utf8'));
   const port = Number(initial.port || 17841);
-  const stagingPort = stagingPortFor(port);
-  if (initial.host !== '127.0.0.1' || !Number.isInteger(port)) throw new Error('existing bridge config is not loopback');
-  const deadline = Date.now() + timeoutMs;
-  let drained = false;
-  let originalPid = null;
+  if (initial.host !== '127.0.0.1' || !Number.isInteger(port)) {
+    throw new Error('existing bridge config is not loopback');
+  }
+  const descriptor = JSON.parse(fs.readFileSync(browserDescriptorFile, 'utf8'));
+  if (!Number.isInteger(descriptor.pid) || descriptor.pid < 1) {
+    throw new Error('launcher browser descriptor is invalid');
+  }
+  const runtimeKey = fs.readFileSync(runtimeKeyFile, 'utf8').trim();
+  if (runtimeKey.length < 20 || runtimeKey.length > 64 * 1024) {
+    throw new Error('runtime key file is empty or unexpectedly large');
+  }
+
+  let appNameChanged = false;
+  let page = null;
   try {
-    while (Date.now() < deadline) {
-      const current = await health(port);
-      if (!current) { await wait(2_000); continue; }
-      if (current.mode === 'full' && current.accepting_turns === true) {
-        originalPid = current.pid;
-        break;
-      }
-      const result = await admin(port, initial.controlToken, 'drain');
-      if (result.active_http_turns === 0 && result.active_browser_turns === 0) {
-        drained = true;
-        originalPid = current.pid;
-        break;
-      }
+    const observed = await health(port);
+    const requiresMutation = observed?.mode !== 'full' || initial.appName !== appName;
+    const current = requiresMutation
+      ? await waitForIdleAndDrain(port, initial.controlToken, timeoutMs)
+      : observed;
+    if (!current) throw new Error('bridge health is unavailable');
+    if (initial.appName !== appName) {
+      atomicJson(configFile, { ...initial, appName });
+      appNameChanged = true;
+    }
+    if (current.mode !== 'full') {
+      page = await launcherPage(descriptor);
+      const input = JSON.stringify({ tunnelId, runtimeKey, replace: true });
+      const expression = `window.codexWebLauncher.setupMcp(${input})`;
+      await evaluate(page, expression, 300_000);
+    } else if (appNameChanged) {
+      page = await launcherPage(descriptor);
+      await evaluate(page, 'window.codexWebLauncher.setupMcp({ replace: false })', 300_000);
+    } else {
       await admin(port, initial.controlToken, 'resume');
+    }
+
+    const bridge = await waitForFull(port);
+    const healthUrlFile = path.join(
+      os.homedir(),
+      'Library',
+      'Application Support',
+      'tunnel-client',
+      'health',
+      `${JSON.parse(fs.readFileSync(configFile, 'utf8')).tunnel?.alias ?? 'codex-chatgpt-web'}.url`,
+    );
+    const deadline = Date.now() + 180_000;
+    let doctor = null;
+    let tunnel = null;
+    while (Date.now() < deadline) {
+      tunnel = await tunnelStatusFromHealth(healthUrlFile);
+      doctor = {
+        ok: bridge.status === 'ok' && tunnel.runtime.ready === true,
+        checks: [
+          { id: 'proxy', status: bridge.status === 'ok' ? 'ok' : 'error' },
+          { id: 'tunnel-runtime', status: tunnel.runtime.ready === true ? 'ok' : 'error' },
+        ],
+      };
+      if (doctor.ok === true) break;
       await wait(2_000);
     }
-    if (!originalPid) throw new Error('bridge did not become atomically idle before timeout');
-
-    let current = await health(port);
-    if (current?.mode !== 'full') {
-      run(cli, [
-        'setup', '--full', '--tunnel-id', tunnelId, '--runtime-key-file', runtimeKeyFile,
-        '--browser-host-descriptor', browserDescriptor, '--app-name', 'Web GPT 작업 하네스',
-        '--port', String(stagingPort), '--preserve-codex-route', '--acknowledge-unofficial'
-      ]);
-      terminate(originalPid);
-      await waitForStop(port, originalPid);
-      const staged = await waitForMode(stagingPort, 'full', originalPid);
-      const fullConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-      if (fullConfig.mode !== 'full' || fullConfig.port !== stagingPort) {
-        throw new Error('launcher did not persist the staged full-mode configuration');
-      }
-      atomicJson(configFile, { ...fullConfig, port });
-      await admin(stagingPort, fullConfig.controlToken, 'drain');
-      terminate(staged.pid);
-      await waitForStop(stagingPort, staged.pid);
-      current = await waitForMode(port, 'full', staged.pid);
-    } else if (drained) {
-      await admin(port, initial.controlToken, 'resume');
-    }
-
-    const doctor = JSON.parse(run(cli, ['doctor', '--json'], 90_000));
-    const tunnel = JSON.parse(run(cli, ['tunnel', 'status'], 30_000));
-    const ocx = await fetch('http://127.0.0.1:10100/healthz', { signal: AbortSignal.timeout(3_000) })
-      .then(response => response.ok ? response.json() : null).catch(() => null);
+    const ocx = await fetch('http://127.0.0.1:10100/healthz', {
+      signal: AbortSignal.timeout(3_000), cache: 'no-store',
+    }).then(response => response.ok ? response.json() : null).catch(() => null);
     const outcome = {
-      ok: doctor.ok === true && tunnel?.runtime?.ready === true && current?.mode === 'full',
+      ok: doctor?.ok === true && tunnel?.runtime?.ready === true && bridge.mode === 'full',
       completedAt: new Date().toISOString(),
-      bridge: { mode: current?.mode, healthy: current?.status === 'ok', acceptingTurns: current?.accepting_turns === true },
+      bridge: { mode: bridge.mode, healthy: bridge.status === 'ok', acceptingTurns: bridge.accepting_turns === true },
+      connectorName: appName,
       harnessTunnel: {
         running: tunnel?.runtime?.processRunning === true,
         healthy: tunnel?.runtime?.healthy === true,
-        ready: tunnel?.runtime?.ready === true
+        ready: tunnel?.runtime?.ready === true,
       },
-      doctor: { ok: doctor.ok === true, checks: doctor.checks?.map(check => ({ id: check.id, status: check.status })) ?? [] },
-      ocx: { healthy: ocx?.ok === true || ocx?.status === 'ok' }
+      doctor: {
+        ok: doctor?.ok === true,
+        checks: doctor?.checks?.map(check => ({ id: check.id, status: check.status })) ?? [],
+      },
+      ocx: { healthy: ocx?.ok === true || ocx?.status === 'ok' },
     };
     atomicJson(resultFile, outcome);
     if (!outcome.ok) throw new Error('post-cutover validation did not become ready');
     process.stdout.write('Web GPT full harness cutover completed.\n');
   } catch (error) {
-    try {
-      const currentConfig = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-      if (currentConfig.mode === 'full') {
-        try { run(cli, ['tunnel', 'stop'], 30_000); } catch {}
-      }
-      fs.copyFileSync(backupConfig, configFile);
-      fs.chmodSync(configFile, 0o600);
-      const staged = await health(stagingPort);
-      if (staged?.pid) {
-        terminate(staged.pid);
-        await waitForStop(stagingPort, staged.pid).catch(() => {});
-      }
-      const current = await health(port);
-      if (current?.pid) terminate(current.pid);
-      if (current?.pid) await waitForMode(port, initial.mode, current.pid, 60_000);
-      else if (drained) await admin(port, initial.controlToken, 'resume').catch(() => {});
-    } catch (rollbackError) {
-      atomicJson(resultFile, { ok: false, failedAt: new Date().toISOString(), error: redact(error), rollbackError: redact(rollbackError) });
-      throw new Error(`${redact(error)}; rollback failed: ${redact(rollbackError)}`);
+    if (appNameChanged) {
+      atomicJson(configFile, initial);
+      try {
+        page ??= await launcherPage(descriptor);
+        await evaluate(page, 'window.codexWebLauncher.setupMcp({ replace: false })', 300_000);
+      } catch {}
     }
-    atomicJson(resultFile, { ok: false, failedAt: new Date().toISOString(), error: redact(error), rolledBack: true });
+    const current = await health(port);
+    if (current?.mode === initial.mode && current.accepting_turns === false) {
+      await admin(port, initial.controlToken, 'resume').catch(() => {});
+    }
+    atomicJson(resultFile, {
+      ok: false,
+      failedAt: new Date().toISOString(),
+      error: redact(error),
+      launcherTransactionalRollback: true,
+    });
     throw error;
   }
 }

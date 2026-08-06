@@ -175,14 +175,14 @@
           </div>
         </article>
         <article class="panel web-test-panel" aria-labelledby="webTestTitle">
-          <div class="panel-title"><div><p class="eyebrow">VERIFICATION EVIDENCE · 2026-08-06</p><h3 id="webTestTitle">비-Pro 8개 모델 추론 시험</h3></div><span class="capability attention">로컬 편집은 아직 미검증</span></div>
-          <div class="test-contract"><strong>공통 조건</strong><span>모든 모델에 같은 최소 프롬프트와 “정상만 출력” 응답 계약을 사용한 새 ephemeral Codex turn</span><span>Pro 미사용 · 도구 호출 없음 · 브라우저 전용 모드</span></div>
+          <div class="panel-title"><div><p class="eyebrow">VERIFICATION EVIDENCE · 2026-08-06</p><h3 id="webTestTitle">비-Pro 8개 추론 + Full 로컬 작업</h3></div><span class="capability">파일·터미널·테스트 검증</span></div>
+          <div class="test-contract"><strong>공통 조건</strong><span>8개 추론은 같은 최소 프롬프트와 “정상만 출력” 응답 계약을 사용한 새 ephemeral Codex turn</span><span>Pro 미사용 · Full 작업은 격리 프로젝트에서 임시/높음으로 별도 실행</span></div>
           <div class="web-test-grid" role="table" aria-label="Web GPT 모델별 소요시간">
             <div class="test-row test-head" role="row"><span role="columnheader">대화</span><span role="columnheader">낮음</span><span role="columnheader">중간</span><span role="columnheader">높음</span><span role="columnheader">매우 높음</span></div>
             <div class="test-row" role="row"><strong role="rowheader">임시</strong><span>25.28초</span><span>25.27초</span><span>25.38초</span><span>25.38초</span></div>
             <div class="test-row" role="row"><strong role="rowheader">저장</strong><span>28.93초</span><span>15.69초</span><span>28.86초</span><span>25.39초</span></div>
           </div>
-          <div class="test-verdicts"><p><span class="verdict-dot pass"></span><strong>추론 8/8 성공</strong><small>각 turn이 정확히 `정상`으로 종료</small></p><p><span class="verdict-dot pending"></span><strong>로컬 편집 보류</strong><small>Full 하네스 + ChatGPT 커넥터 뒤 재시험</small></p></div>
+          <div class="test-verdicts"><p><span class="verdict-dot pass"></span><strong>추론 8/8 성공</strong><small>각 turn이 정확히 `정상`으로 종료</small></p><p><span class="verdict-dot pass"></span><strong>로컬 작업 성공 · 85.08초</strong><small>파일 패치 → 터미널 → `npm test` 1/1 통과</small></p></div>
         </article>
       </section>
 

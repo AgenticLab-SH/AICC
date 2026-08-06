@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { sanitize } from '../lib/redact.mjs';
 
 const WEB_MODELS = Object.freeze([
@@ -21,21 +20,19 @@ function configuredRoute(configFile) {
   } catch { return null; }
 }
 
-function defaultTunnelStatus(cliPath) {
-  const result = spawnSync(cliPath, ['tunnel', 'status'], {
-    encoding: 'utf8', timeout: 12_000, windowsHide: true
-  });
-  if (result.status !== 0) return null;
+async function defaultTunnelStatus(healthUrlFile, fetcher, timeoutMs) {
   try {
-    const parsed = JSON.parse(result.stdout);
-    const runtime = parsed?.runtime;
-    if (!runtime || typeof runtime !== 'object') return null;
-    return {
-      running: runtime.processRunning === true,
-      healthy: runtime.healthy === true,
-      ready: runtime.ready === true,
-      state: typeof runtime.state === 'string' ? runtime.state : null
-    };
+    const endpoint = new URL(fs.readFileSync(healthUrlFile, 'utf8').trim());
+    if (endpoint.protocol !== 'http:' || endpoint.hostname !== '127.0.0.1') return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetcher(new URL('/healthz', endpoint), {
+        headers: { accept: 'text/plain' }, signal: controller.signal
+      });
+      if (!response.ok || (await response.text()).trim() !== 'live') return null;
+      return { running: true, healthy: true, ready: true, state: 'ready' };
+    } finally { clearTimeout(timer); }
   } catch { return null; }
 }
 
@@ -56,7 +53,6 @@ export async function webGptStatus(options = {}) {
   const configPath = options.configPath ?? path.join(stateRoot, 'config.json');
   const codexConfigPath = options.codexConfigPath ?? path.join(home, '.codex', 'config.toml');
   const appPath = options.appPath ?? '/Applications/Codex Web GPT.app';
-  const cliPath = options.cliPath ?? path.join(appPath, 'Contents', 'Resources', 'runtime', 'bin', 'codex-chatgpt-web');
   const launcherStatePath = options.launcherStatePath
     ?? path.join(home, 'Library', 'Application Support', 'Codex Web GPT', 'launcher-state.json');
   const config = readJson(configPath);
@@ -73,8 +69,20 @@ export async function webGptStatus(options = {}) {
   const modelLabels = proAvailable ? [...WEB_MODELS, ...WEB_PRO_MODELS] : [...WEB_MODELS];
   const tunnelConfigured = Boolean(config?.tunnel);
   const harnessConfigured = mode === 'full' && tunnelConfigured;
+  const tunnelHealthUrlFile = options.tunnelHealthUrlFile ?? path.join(
+    home,
+    'Library',
+    'Application Support',
+    'tunnel-client',
+    'health',
+    `${config?.tunnel?.alias ?? 'codex-chatgpt-web'}.url`,
+  );
   const tunnelRuntime = harnessConfigured
-    ? sanitize(await (options.tunnelStatus ?? defaultTunnelStatus)(cliPath))
+    ? sanitize(await (options.tunnelStatus ?? defaultTunnelStatus)(
+      tunnelHealthUrlFile,
+      options.fetch ?? fetch,
+      options.timeoutMs ?? 2_500,
+    ))
     : null;
   const harnessReady = harnessConfigured && tunnelRuntime?.ready === true && runtime?.mode === 'full';
   const connectorVerified = harnessReady && launcherState?.mcpSetupComplete === true;
