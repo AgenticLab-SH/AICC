@@ -21,9 +21,16 @@ function fixture(t) {
 test('dashboard installer retries transient launchd bootstrap error 5', t => {
   const paths = fixture(t);
   let bootstrapCalls = 0;
+  let healthCalls = 0;
   const pauses = [];
   const spawnSync = (command, args) => {
     if (command === 'plutil') return { status: 0, stdout: '', stderr: '' };
+    if (command === 'curl') {
+      healthCalls += 1;
+      return healthCalls === 1
+        ? { status: 7, stdout: '', stderr: 'connection refused' }
+        : { status: 0, stdout: '{"ok":true}', stderr: '' };
+    }
     if (args[0] === 'bootout') return { status: 0, stdout: '', stderr: '' };
     if (args[0] === 'print') return { status: 113, stdout: '', stderr: '' };
     bootstrapCalls += 1;
@@ -40,8 +47,10 @@ test('dashboard installer retries transient launchd bootstrap error 5', t => {
   });
   assert.equal(result.ok, true);
   assert.equal(result.bootstrapAttempts, 2);
+  assert.equal(result.healthAttempts, 2);
   assert.equal(bootstrapCalls, 2);
-  assert.deepEqual(pauses, [150]);
+  assert.equal(healthCalls, 2);
+  assert.deepEqual(pauses, [150, 100]);
 });
 
 test('dashboard installer does not hide a non-transient bootstrap failure', t => {
@@ -55,5 +64,27 @@ test('dashboard installer does not hide a non-transient bootstrap failure', t =>
   assert.throws(
     () => installDashboardLaunchAgent({ ...paths, platform: 'darwin', uid: 501, spawnSync, pause: () => {} }),
     /permission denied/
+  );
+});
+
+test('dashboard installer fails when launchd registers but healthz never becomes ready', t => {
+  const paths = fixture(t);
+  const spawnSync = (command, args) => {
+    if (command === 'plutil') return { status: 0, stdout: '', stderr: '' };
+    if (command === 'curl') return { status: 7, stdout: '', stderr: 'connection refused' };
+    if (args[0] === 'bootout' || args[0] === 'bootstrap') return { status: 0, stdout: '', stderr: '' };
+    if (args[0] === 'print') return { status: 113, stdout: '', stderr: '' };
+    return { status: 1, stdout: '', stderr: 'unexpected command' };
+  };
+  assert.throws(
+    () => installDashboardLaunchAgent({
+      ...paths,
+      platform: 'darwin',
+      uid: 501,
+      healthAttempts: 2,
+      spawnSync,
+      pause: () => {}
+    }),
+    /healthz 준비를 확인하지 못했습니다/
   );
 });
