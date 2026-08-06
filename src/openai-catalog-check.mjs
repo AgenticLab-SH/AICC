@@ -2,6 +2,7 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { openaiCatalogCheckPath, openaiComplimentaryConfig } from './openai-usage.mjs';
 
 const HELP_JSON_URL = `${openaiComplimentaryConfig.sources.complimentary}.json`;
@@ -113,7 +114,7 @@ export function openaiCatalogCheckStatus(options = {}) {
   }
 }
 
-if (path.resolve(process.argv[1] || '') === path.resolve(new URL(import.meta.url).pathname)) {
+if (path.resolve(process.argv[1] || '') === path.resolve(fileURLToPath(import.meta.url))) {
   const result = await checkOpenaiCatalog({ home: os.homedir() });
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
   if (!result.ok) process.exitCode = 1;

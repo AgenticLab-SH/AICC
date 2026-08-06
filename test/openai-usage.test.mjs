@@ -98,6 +98,24 @@ test('guard records exact API usage per model without persisting prompts or keys
   if (process.platform !== 'win32') assert.equal(fs.statSync(openaiUsagePath(options)).mode & 0o077, 0);
 });
 
+test('usage display merges historical aliases into one canonical model row', t => {
+  const options = temporaryState(t);
+  fs.writeFileSync(options.file, JSON.stringify({
+    schemaVersion: 3,
+    dayUtc: '2026-08-06',
+    updatedAt: '2026-08-06T11:00:00Z',
+    pendingTokens: { frontier: 0, efficient: 0 },
+    models: {
+      'gpt-5.4-mini': { requests: 1, inputTokens: 10, cachedInputTokens: 0, outputTokens: 2, projects: {} },
+      'gpt-5.4-mini-2026-03-17': { requests: 2, inputTokens: 20, cachedInputTokens: 0, outputTokens: 4, projects: {} }
+    }
+  }), { mode: 0o600 });
+  const rows = openaiUsageStatus(options).groups.find(group => group.id === 'efficient').models;
+  assert.deepEqual(rows.map(row => row.model), ['gpt-5.4-mini-2026-03-17']);
+  assert.equal(rows[0].requests, 3);
+  assert.equal(rows[0].totalTokens, 36);
+});
+
 test('project identity uses an opaque stable id and never exposes the supplied alias as a path', () => {
   const first = resolveOpenaiProject({ project: 'music-score-studio' });
   const second = resolveOpenaiProject({ project: 'music-score-studio' });

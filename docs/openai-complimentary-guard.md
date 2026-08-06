@@ -3,21 +3,38 @@
 ## 무엇을 해결하나
 
 OpenAI의 API 입력·출력 공유 인센티브를 켠 프로젝트에서 AICC를 통과한 요청만 로컬로
-즉시 세고, 현재 공식 화면에 표시된 두 일일 풀의 95%에서 새 요청을 차단한다. 공식 대상
-모델만 카탈로그에 넣고 사용자가 API 호출과 에이전트 자동 선택을 별도로 허용한다.
+즉시 세고, 현재 계정 화면에 표시된 두 일일 풀을 보호한다. 80%에서 경고하고 90%에서
+provider를 자동 정지하며, 95% 하드 차단도 별도로 유지한다. 공식 catalog와 현재 계정의
+무료 대상, 실제 API 접근 가능성을 분리하고 사용자가 API 호출과 에이전트 자동 선택을
+별도로 허용한다.
 
-| UTC 일일 풀 | 공식 한도 | AICC 하드 한도 |
-| --- | ---: | ---: |
-| 고성능 모델 | 250,000 token | 237,500 token |
-| 경량 모델 | 2,500,000 token | 2,375,000 token |
+| UTC 일일 풀 | 공식 한도 | 경고 | 자동 정지 | 하드 차단 |
+| --- | ---: | ---: | ---: | ---: |
+| 고성능 모델 | 250,000 token | 200,000 | 225,000 | 237,500 |
+| 경량 모델 | 2,500,000 token | 2,000,000 | 2,250,000 | 2,375,000 |
 
 한도와 대상 모델은 2026-08-06 Personal 조직의 공식 설정 화면과
 [OpenAI 도움말](https://help.openai.com/en/articles/10306912-sharing-feedback-evals-and-api-data-with-openai)을
 기준으로 확인했다. 정책이 바뀌면 코드와 이 문서를 함께 갱신해야 한다.
 
-현재 공식 목록은 `gpt-5.6-sol`을 고성능 풀에, `gpt-5.6-terra`와 `gpt-5.6-luna`를
-경량 풀에 포함한다. AICC 웹은 공식 목록 전체와 날짜가 있는 input/cached/output 가격을
-표시한다. 종료 모델은 참고용으로만 남기고 활성화할 수 없다.
+Personal 조직 화면은 고성능 11개, 경량 12개 모델군을 무료 대상으로 표시했다. 별도의
+Usage 검증에서는 `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.6-luna`도
+`Data sharing incentive tier`로 관측했다. 이 계정 전용 기록은 사용자 전용 상태에만 두며,
+Help Center의 전역 catalog 30개를 곧바로 호출 허용 목록으로 사용하지 않는다.
+
+2026-08-06 최소 실호출에서는 이 26개 모델군/관측 모델 중 20개가 Responses API에서
+성공했고 배치 사용량은 281 token이었다. 다음 6개는 현재 계정의 Responses API에서
+`model_not_found`였다.
+
+- `codex-mini-latest`
+- `gpt-5-chat-latest`
+- `gpt-5-codex`
+- `gpt-5.1-codex`
+- `gpt-5.1-codex-mini`
+- `o1-mini`
+
+무료 목록에 있다는 사실은 현재 endpoint 접근 가능성을 보장하지 않으므로, 실패 모델은
+availability 결과를 그대로 표시하고 자동 선택하지 않는다.
 
 ## 사용법
 
@@ -29,6 +46,8 @@ aicc openai usage
 aicc openai usage --json
 aicc openai provider --json
 aicc openai models --json
+aicc openai monitor status --json
+aicc openai catalog check --json
 cd /path/to/git-project
 aicc openai project status
 printf '요약해줘' | aicc openai estimate --max-output 512
@@ -41,7 +60,17 @@ printf '요약해줘' | aicc openai ask --max-output 512
 
 원장은 `~/.ai-control-center/openai-usage/usage.json`에 사용자 전용 권한으로 저장한다.
 프롬프트, 응답, API key는 저장하지 않고 모델별 요청 수와 input/cached/output token만
-저장한다. UTC 00:00에 새 일자로 자동 전환한다.
+저장한다. UTC 00:00에 새 일자로 자동 전환한다. 호출 전에는 보수적 입력 상한과
+`max_output_tokens`를 `pendingTokens`로 먼저 예약하고, 성공 시 실제 `response.usage`로
+정산하며 실패 시 예약을 반환한다. 프로세스가 중간 종료되어 예약이 남으면 적게 허용하는
+안전 방향으로 실패한다.
+
+4381 Dashboard LaunchAgent는 60초마다 로컬 원장을 평가한다. 다음 명령은 같은 평가를
+즉시 실행한다.
+
+```bash
+aicc openai monitor run --json
+```
 
 ## AICC provider 관리
 
@@ -52,8 +81,30 @@ printf '요약해줘' | aicc openai ask --max-output 512
 - `연결 확인`: 고정된 비민감 문장으로 최소 요청을 보내 실제 계정 접근을 기록한다.
 
 Restricted key에 `api.model.read` scope를 추가하지 않아도 안전하게 운영할 수 있도록,
-공식 무료 목록을 정본으로 쓰고 실제 접근 여부는 개별 최소 호출로 확인한다. 키 권한을
+계정 화면의 무료 대상 기록을 호출 allowlist로 쓰고 실제 접근 여부는 개별 최소 호출로
+확인한다. 키 권한을
 넓혀 `/v1/models`를 읽는 것은 별도의 보안 결정이며 자동으로 수행하지 않는다.
+
+전수 확인은 명시적 token 사용 확인이 있어야 실행된다.
+
+```bash
+aicc openai probe-all --confirm-token-use --json
+```
+
+## catalog 갱신
+
+서버는 시작 5초 뒤와 이후 6시간마다 다음 두 공식 소스를 읽기 전용으로 비교한다.
+
+- Help Center 공유 인센티브 문서의 machine-readable JSON
+- OpenAI Developers 모델 catalog Markdown
+
+결과와 source hash만 `~/.ai-control-center/openai-usage/catalog-check.json`에 기록한다.
+새 모델이나 제거 후보를 발견해도 source code와 가격표를 자동 수정하지 않는다. 공식 문서와
+현재 계정 Data Controls 화면을 사람이 검토한 뒤 eligibility와 catalog를 갱신한다.
+
+```bash
+aicc openai catalog check --json
+```
 
 ## 로컬 프로젝트 예산
 
@@ -92,6 +143,18 @@ aicc openai project set \
   별도 인증·secret·rate limit·비용 승인 경계를 설계한다.
 - AICC 오류나 한도 차단을 정상 실패로 처리하고 deterministic fallback을 둔다.
 
+Codex agent가 raw key를 가져가 우회하지 않도록 AICC는 각 Codex home에 다음 두 경계를
+관리할 수 있다.
+
+- shell child에 `OPENAI_API_KEY`와 `OPENAI_ADMIN_KEY`를 전달하지 않는다.
+- Bash의 직접 `api.openai.com`, OpenAI Keychain 읽기, key 환경변수 읽기를 PreToolUse
+  hook에서 차단한다.
+
+설치는 모든 Codex home을 먼저 검사하고, 충돌이나 TOML 검증 실패가 있으면 이미 바꾼 파일을
+전부 복원한다. 기존 비관리 `requirements.toml`은 덮어쓰지 않는다. 이 경계는 Codex agent의
+일반적인 우회를 막는 것이며, 같은 macOS 사용자 권한으로 실행한 사람이나 별도 앱까지 완전한
+보안 경계로 격리하지는 않는다.
+
 ## 표시를 읽는 법
 
 - 풀 게이지는 같은 무료 한도를 공유하는 모델들의 실제 input+output token 합계다.
@@ -110,6 +173,12 @@ Playground에서 같은 프로젝트/API key를 쓴 사용량은 알 수 없다.
 별도의 Admin API key로 Usage/Costs API를 읽는 동기화가 필요하며, 그 집계도 실시간이라고
 가정하면 안 된다. Admin key는 일반 호출 key보다 권한이 크므로 현재 기본 구성에서는 만들거나
 저장하지 않는다.
+
+실측 Usage Dashboard는 모델 호출을 한 번에 모두 반영하지 않고 단계적으로 갱신했으며,
+로컬 원장과 완전히 일치하기까지 690초가 걸렸다.
+따라서 공식 화면은 무료 귀속과 사후 대조에 사용하고, 다음 요청의 허용 판단은 응답 직후
+정산되는 로컬 원장과 호출 전 예약만 사용한다. 2026-08-06 검증에서는 비용이 `$0.00`였고
+`Data sharing incentive tier` 필터에서 성공 모델 사용량을 확인했다.
 
 데이터 공유 동의는 계정 소유자가 약관과 입력 데이터 권리를 직접 확인해 완료해야 한다.
 기밀, 개인정보, 건강정보, 아동 데이터, 권리를 보유하지 않은 콘텐츠는 보내지 않는다.

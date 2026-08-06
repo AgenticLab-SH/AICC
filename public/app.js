@@ -538,8 +538,10 @@ function renderOpenaiProvider(provider) {
   });
   openaiModelList.innerHTML = visible.map(model => {
     const price = model.pricing;
-    const unavailable = model.lifecycle === 'retired' || !model.eligibility?.verified;
-    const accessClass = model.availability?.status === 'available' ? 'ready' : ['unavailable', 'not_found', 'access_denied', 'rate_limited'].includes(model.availability?.status) ? 'attention' : '';
+    const failedAvailability = ['unavailable', 'not_found', 'access_denied', 'rate_limited'].includes(model.availability?.status);
+    const cannotEnable = model.lifecycle === 'retired' || !model.eligibility?.verified || failedAvailability;
+    const cannotProbe = model.lifecycle === 'retired' || !model.eligibility?.verified || !enabled;
+    const accessClass = model.availability?.status === 'available' ? 'ready' : failedAvailability ? 'attention' : '';
     return `<article class="openai-model-row${model.isDefault ? ' is-default' : ''}">
       <div class="openai-model-copy">
         <div class="openai-model-title"><strong>${escapeHtml(model.label)}</strong><code>${escapeHtml(model.id)}</code>${model.isDefault ? '<span class="model-policy-badge default">기본</span>' : ''}<span class="model-policy-badge">${escapeHtml(model.groupId)}</span><span class="model-policy-badge ${model.eligibility?.verified ? 'ready' : 'attention'}">${model.eligibility?.status === 'observed_incentive' ? '무료 실측' : model.eligibility?.status === 'account_declared' ? '계정 표시' : '무료 미확인'}</span><span class="model-policy-badge ${accessClass}">${availabilityLabel(model.availability)}</span></div>
@@ -547,10 +549,10 @@ function renderOpenaiProvider(provider) {
         <small>오늘 입력 ${formatTokens(model.usage.inputTokens)} · 출력 ${formatTokens(model.usage.outputTokens)} · 공유 풀 ${model.usage.sharedPoolPercent}% · 표준요금 환산 ${model.usage.estimatedStandardCostUsd == null ? '–' : `$${model.usage.estimatedStandardCostUsd.toFixed(5)}`}</small>
       </div>
       <div class="openai-model-actions">
-        <button type="button" class="secondary" data-openai-model-action="call" data-model="${escapeHtml(model.id)}" data-call-enabled="${!model.callEnabled}" data-agent-selectable="${model.agentSelectable}" ${unavailable ? 'disabled' : ''}>API ${model.callEnabled ? '끄기' : '켜기'}</button>
-        <button type="button" class="secondary" data-openai-model-action="agent" data-model="${escapeHtml(model.id)}" data-call-enabled="${model.callEnabled}" data-agent-selectable="${!model.agentSelectable}" ${unavailable || !model.callEnabled ? 'disabled' : ''}>Agent ${model.agentSelectable ? '제외' : '허용'}</button>
-        <button type="button" class="secondary" data-openai-model-action="default" data-model="${escapeHtml(model.id)}" ${unavailable || !model.agentSelectable || model.isDefault ? 'disabled' : ''}>기본 지정</button>
-        <button type="button" class="ghost" data-openai-model-action="probe" data-model="${escapeHtml(model.id)}" ${unavailable || !enabled ? 'disabled' : ''}>연결 확인</button>
+        <button type="button" class="secondary" data-openai-model-action="call" data-model="${escapeHtml(model.id)}" data-call-enabled="${!model.callEnabled}" data-agent-selectable="${model.agentSelectable}" ${cannotEnable ? 'disabled' : ''}>API ${model.callEnabled ? '끄기' : '켜기'}</button>
+        <button type="button" class="secondary" data-openai-model-action="agent" data-model="${escapeHtml(model.id)}" data-call-enabled="${model.callEnabled}" data-agent-selectable="${!model.agentSelectable}" ${cannotEnable || !model.callEnabled ? 'disabled' : ''}>Agent ${model.agentSelectable ? '제외' : '허용'}</button>
+        <button type="button" class="secondary" data-openai-model-action="default" data-model="${escapeHtml(model.id)}" ${cannotEnable || !model.agentSelectable || model.isDefault ? 'disabled' : ''}>기본 지정</button>
+        <button type="button" class="ghost" data-openai-model-action="probe" data-model="${escapeHtml(model.id)}" ${cannotProbe ? 'disabled' : ''}>연결 재확인</button>
       </div>
     </article>`;
   }).join('') || '<p class="empty-usage">선택한 조건에 맞는 모델이 없습니다.</p>';

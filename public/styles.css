@@ -290,7 +290,8 @@ dialog ul { padding-left: 21px; color: var(--amber); line-height: 1.65; }
   .usage-contract code { max-width: none; text-align: left; }
   .usage-project-heading, .usage-project-row { align-items: flex-start; grid-template-columns: 1fr; }
   .openai-provider-heading, .openai-model-catalog-head { display: grid; }
-  .openai-monitor-heading, .openai-monitor-summary { grid-template-columns: 1fr; }
+  .openai-monitor-heading { align-items: stretch; flex-direction: column; }
+  .openai-monitor-summary { grid-template-columns: 1fr; }
   .openai-model-catalog-head > div:last-child { text-align: left; }
   .openai-model-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .usage-project-heading { display: grid; }

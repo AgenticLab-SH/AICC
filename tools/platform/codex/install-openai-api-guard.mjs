@@ -112,30 +112,50 @@ export function openaiAgentGuardStatus(options = {}) {
 export function installOpenaiAgentGuard(options = {}) {
   if (!fs.existsSync(hook)) throw new Error('AICC OpenAI guard hook가 없습니다.');
   const targetHomes = homes(options);
-  const backupRoot = path.join(stateRoot(options), 'backups', 'openai-agent-guard', new Date().toISOString().replace(/[:.]/g, '-'));
-  fs.mkdirSync(backupRoot, { recursive: true, mode: 0o700 });
-  const journal = [];
-  const validate = [];
-  for (const [index, home] of targetHomes.entries()) {
+  const targets = targetHomes.map((home, index) => {
     const config = path.join(home, 'config.toml');
     const requirements = path.join(home, 'requirements.toml');
     assertRegularOrMissing(config);
     assertRegularOrMissing(requirements);
     if (!fs.existsSync(config)) throw new Error(`Codex config.toml이 없습니다: ${home}`);
+    const configBefore = fs.readFileSync(config, 'utf8');
     const requirementBefore = fs.existsSync(requirements) ? fs.readFileSync(requirements, 'utf8') : null;
     if (requirementBefore != null && !requirementBefore.includes(marker)) throw new Error(`기존 requirements.toml은 AICC가 소유하지 않아 덮어쓰지 않습니다: ${home}`);
-    const configBefore = fs.readFileSync(config, 'utf8');
-    const relative = String(index).padStart(2, '0');
-    const configBackup = path.join(backupRoot, `${relative}-config.toml`);
-    const requirementsBackup = path.join(backupRoot, `${relative}-requirements.toml`);
-    atomicWrite(configBackup, configBefore);
-    if (requirementBefore != null) atomicWrite(requirementsBackup, requirementBefore);
-    atomicWrite(config, ensureFilterBlock(configBefore));
-    atomicWrite(requirements, requirementsText());
-    validate.push(config, requirements);
-    journal.push({ home, config, requirements, configBackup, requirementsBackup: requirementBefore == null ? null : requirementsBackup, requirementExisted: requirementBefore != null, beforeHash: sha(configBefore) });
+    return { home, index, config, requirements, configBefore, requirementBefore };
+  });
+  const backupRoot = path.join(stateRoot(options), 'backups', 'openai-agent-guard', new Date().toISOString().replace(/[:.]/g, '-'));
+  fs.mkdirSync(backupRoot, { recursive: true, mode: 0o700 });
+  const journal = [];
+  const validate = [];
+  try {
+    for (const target of targets) {
+      const relative = String(target.index).padStart(2, '0');
+      const configBackup = path.join(backupRoot, `${relative}-config.toml`);
+      const requirementsBackup = path.join(backupRoot, `${relative}-requirements.toml`);
+      atomicWrite(configBackup, target.configBefore);
+      if (target.requirementBefore != null) atomicWrite(requirementsBackup, target.requirementBefore);
+      atomicWrite(target.config, ensureFilterBlock(target.configBefore));
+      atomicWrite(target.requirements, requirementsText());
+      validate.push(target.config, target.requirements);
+      journal.push({
+        home: target.home,
+        config: target.config,
+        requirements: target.requirements,
+        configBackup,
+        requirementsBackup: target.requirementBefore == null ? null : requirementsBackup,
+        requirementExisted: target.requirementBefore != null,
+        beforeHash: sha(target.configBefore)
+      });
+    }
+    validateToml(validate, options);
+  } catch (error) {
+    for (const row of journal.reverse()) {
+      atomicWrite(row.config, fs.readFileSync(row.configBackup, 'utf8'));
+      if (row.requirementExisted) atomicWrite(row.requirements, fs.readFileSync(row.requirementsBackup, 'utf8'));
+      else fs.rmSync(row.requirements, { force: true });
+    }
+    throw error;
   }
-  validateToml(validate, options);
   const state = { schemaVersion: 1, appliedAt: new Date().toISOString(), backupRoot, files: journal };
   atomicWrite(path.join(stateRoot(options), 'openai-usage', 'agent-guard.json'), `${JSON.stringify(state, null, 2)}\n`);
   return openaiAgentGuardStatus(options);

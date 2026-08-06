@@ -424,6 +424,24 @@ function usageTotal(usage = {}) {
   return (usage.inputTokens || 0) + (usage.outputTokens || 0);
 }
 
+function canonicalModelId(modelInput) {
+  return MODEL_BY_INPUT.get(String(modelInput || '').trim())?.id || String(modelInput || '').trim();
+}
+
+function aggregateUsageRows(entries) {
+  const rows = new Map();
+  for (const [storedModel, usage] of entries) {
+    const model = canonicalModelId(storedModel);
+    const row = rows.get(model) || { model, requests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0 };
+    row.requests += usage.requests || 0;
+    row.inputTokens += usage.inputTokens || 0;
+    row.cachedInputTokens += usage.cachedInputTokens || 0;
+    row.outputTokens += usage.outputTokens || 0;
+    rows.set(model, row);
+  }
+  return Array.from(rows.values()).map(row => ({ ...row, totalTokens: usageTotal(row) }));
+}
+
 function projectUsageForGroup(ledger, projectId, groupId) {
   return Object.entries(ledger.models || {})
     .filter(([model]) => complimentaryGroupForModel(model) === groupId)
@@ -437,14 +455,14 @@ function projectSummaries(ledger, options = {}) {
       const summary = projects.get(projectId) || { id: projectId, label: projectUsage.label || projectId, requests: 0, tokens: 0, models: new Map() };
       summary.requests += projectUsage.requests || 0;
       summary.tokens += usageTotal(projectUsage);
-      summary.models.set(model, {
-        model,
-        requests: projectUsage.requests || 0,
-        inputTokens: projectUsage.inputTokens || 0,
-        cachedInputTokens: projectUsage.cachedInputTokens || 0,
-        outputTokens: projectUsage.outputTokens || 0,
-        totalTokens: usageTotal(projectUsage)
-      });
+      const canonical = canonicalModelId(model);
+      const modelUsage = summary.models.get(canonical) || { model: canonical, requests: 0, inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, totalTokens: 0 };
+      modelUsage.requests += projectUsage.requests || 0;
+      modelUsage.inputTokens += projectUsage.inputTokens || 0;
+      modelUsage.cachedInputTokens += projectUsage.cachedInputTokens || 0;
+      modelUsage.outputTokens += projectUsage.outputTokens || 0;
+      modelUsage.totalTokens = usageTotal(modelUsage);
+      summary.models.set(canonical, modelUsage);
       projects.set(projectId, summary);
     }
   }
@@ -695,17 +713,12 @@ export function recordOpenaiOfficialObservation(observation, options = {}) {
 export function openaiUsageStatus(options = {}) {
   const ledger = readLedger(options);
   const groups = Object.entries(GROUPS).map(([id, definition]) => {
-    const rows = Object.entries(ledger.models)
-      .filter(([model]) => complimentaryGroupForModel(model) === id)
-      .map(([model, usage]) => ({
-        model: MODEL_BY_INPUT.get(model)?.id || model,
-        label: MODEL_BY_INPUT.get(model)?.label || model,
-        requests: usage.requests || 0,
-        inputTokens: usage.inputTokens || 0,
-        cachedInputTokens: usage.cachedInputTokens || 0,
-        outputTokens: usage.outputTokens || 0,
-        totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
-        estimatedStandardCostUsd: modelCost(model, usage)
+    const rows = aggregateUsageRows(Object.entries(ledger.models)
+      .filter(([model]) => complimentaryGroupForModel(model) === id))
+      .map(row => ({
+        ...row,
+        label: MODEL_BY_INPUT.get(row.model)?.label || row.model,
+        estimatedStandardCostUsd: modelCost(row.model, row)
       }))
       .sort((left, right) => right.totalTokens - left.totalTokens);
     const tokens = rows.reduce((sum, row) => sum + row.totalTokens, 0);

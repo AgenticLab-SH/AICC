@@ -76,6 +76,8 @@ aicc openai usage            # 로컬 무료 토큰 guard 원장
 aicc openai provider         # API 전체 상태·기본 모델·허용 정책
 aicc openai models           # 공식 무료 모델·가격·실호출 확인 상태
 aicc openai project status   # 현재 Git 프로젝트 예산과 사용량
+aicc openai monitor status   # 60초 감시·선제 정지·공식 화면 관측 상태
+aicc openai catalog check    # OpenAI 도움말·개발자 catalog 변경 감지
 ```
 
 `cm`은 기존 자동화용 `aicc account` 호환 별칭입니다.
@@ -93,8 +95,9 @@ aicc action execute --confirmation '<확인 토큰>'
 `manage-codex-model-routes` 스킬이 담당합니다.
 
 OpenAI API 공유 인센티브를 사용할 때는 프롬프트를 명령행 인자로 남기지 않고 stdin으로
-전달합니다. AICC는 현재 공식 무료 대상 모델만 허용하고 각 UTC 일일 풀의 95%에서
-전역 요청을 차단합니다. 현재 Git 프로젝트는 remote URL의 비밀 없는 hash로 자동 식별하고
+전달합니다. AICC는 현재 계정 화면에서 무료 대상으로 확인된 모델만 허용합니다. 로컬 원장이
+80%에서 경고하고 90%에서 provider를 선제 정지하며, 각 UTC 일일 풀의 95%는 독립 하드
+차단선으로 남깁니다. 현재 Git 프로젝트는 remote URL의 비밀 없는 hash로 자동 식별하고
 기본적으로 각 하드 한도의 10%까지만 사용합니다.
 
 ```bash
@@ -106,6 +109,10 @@ printf '짧게 답해줘' | aicc openai ask --max-output 256
 사용자는 AICC 웹에서 OpenAI API 전체 상태, 모델별 호출 허용, 에이전트 자동 선택 허용과
 기본 모델을 관리합니다. 공식 무료 모델 목록과 실제 계정 접근 여부는 분리하며, 개별
 “연결 확인”은 비민감 고정 문장으로 최소 요청을 보내 검증합니다.
+4381 Dashboard LaunchAgent는 원장을 60초마다 평가하고 공식 catalog를 6시간마다 읽기 전용
+검사합니다. Codex agent home에는 API key 환경변수 전달 제외와 직접 `api.openai.com` 호출
+차단 hook을 적용할 수 있으며, 사람이나 별도 앱의 의도적 직접 호출까지 통제한다고 주장하지
+않습니다.
 정적 브라우저 앱은 키나 localhost API를 직접 사용하지 않습니다. 배포 서버에서 호출해야
 한다면 별도의 서버 secret·인증·비용 정책을 먼저 설계해야 합니다.
 
