@@ -18,7 +18,7 @@ def deny(reason: str) -> None:
                     "permissionDecisionReason": reason,
                 }
             },
-            ensure_ascii=False,
+            ensure_ascii=True,
         )
     )
 

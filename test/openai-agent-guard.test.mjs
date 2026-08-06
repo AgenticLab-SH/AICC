@@ -60,6 +60,7 @@ test('agent guard hook denies direct OpenAI calls and allows the AICC gateway', 
   });
   const denied = run('curl https://api.openai.com/v1/responses');
   assert.equal(denied.status, 0);
+  assert.doesNotMatch(denied.stdout, /[^\x00-\x7F]/);
   assert.equal(JSON.parse(denied.stdout).hookSpecificOutput.permissionDecision, 'deny');
   const allowed = run("printf 'hello' | aicc openai ask --json");
   assert.equal(allowed.status, 0);
