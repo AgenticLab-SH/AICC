@@ -1,28 +1,29 @@
 import AppKit
+import CoreGraphics
 import Foundation
 
-private struct NormalChromeConfiguration {
-    let chromeApp: String
-    let chromeExecutable: String
+private struct NormalWhaleConfiguration {
+    let whaleApp: String
+    let whaleExecutable: String
     let userData: String
     let profile: String
     let startURL: String
 
-    static func load() throws -> NormalChromeConfiguration {
+    static func load() throws -> NormalWhaleConfiguration {
         let info = Bundle.main.infoDictionary ?? [:]
         func required(_ key: String) throws -> String {
             guard let value = info[key] as? String, !value.isEmpty else {
                 throw NSError(
-                    domain: "AICC.NormalChromeLauncher",
+                    domain: "AICC.NormalWhaleLauncher",
                     code: 2,
                     userInfo: [NSLocalizedDescriptionKey: "Missing launcher setting: \(key)"]
                 )
             }
             return value
         }
-        return NormalChromeConfiguration(
-            chromeApp: try required("AICCChromeApplication"),
-            chromeExecutable: try required("AICCChromeExecutable"),
+        return NormalWhaleConfiguration(
+            whaleApp: try required("AICCWhaleApplication"),
+            whaleExecutable: try required("AICCWhaleExecutable"),
             userData: try required("AICCUserData"),
             profile: try required("AICCProfileDirectory"),
             startURL: try required("AICCStartURL")
@@ -39,25 +40,23 @@ private struct NormalChromeConfiguration {
     }
 }
 
-final class NormalChromeDelegate: NSObject, NSApplicationDelegate {
-    private var configuration: NormalChromeConfiguration?
-    private var monitor: Timer?
+final class NormalWhaleDelegate: NSObject, NSApplicationDelegate {
+    private var configuration: NormalWhaleConfiguration?
     private var targetPID: pid_t?
     private var launching = false
-    private var missingChecks = 0
-    private var forwardingActivation = false
     private var showingFailure = false
+    private var observers: [NSObjectProtocol] = []
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.regular)
         do {
-            configuration = try NormalChromeConfiguration.load()
+            configuration = try NormalWhaleConfiguration.load()
         } catch {
             showFailure(error.localizedDescription)
             return
         }
+        observeWorkspace()
         setBadge("…")
-        startMonitor()
         focusOrLaunch()
     }
 
@@ -66,25 +65,14 @@ final class NormalChromeDelegate: NSObject, NSApplicationDelegate {
         return false
     }
 
-    func applicationDidBecomeActive(_ notification: Notification) {
-        if !forwardingActivation { focusOrLaunch() }
-    }
-
-    func application(_ application: NSApplication, open urls: [URL]) {
-        guard let url = urls.first?.absoluteString else {
-            focusOrLaunch()
-            return
-        }
-        focusOrLaunch(url: url)
-    }
-
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
         let menu = NSMenu()
-        let status = NSMenuItem(title: targetPID == nil ? "일반 Chrome: 시작 대기" : "일반 Chrome: 실행 중", action: nil, keyEquivalent: "")
+        let title = targetPID == nil ? "일반 Whale: 시작 대기" : "일반 Whale: 실행 중"
+        let status = NSMenuItem(title: title, action: nil, keyEquivalent: "")
         status.isEnabled = false
         menu.addItem(status)
         menu.addItem(NSMenuItem.separator())
-        let focus = NSMenuItem(title: "일반 Chrome 열기", action: #selector(openFromDock(_:)), keyEquivalent: "")
+        let focus = NSMenuItem(title: "일반 Whale 열기", action: #selector(openFromDock(_:)), keyEquivalent: "")
         focus.target = self
         menu.addItem(focus)
         return menu
@@ -94,111 +82,131 @@ final class NormalChromeDelegate: NSObject, NSApplicationDelegate {
         focusOrLaunch()
     }
 
-    private func startMonitor() {
-        monitor = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: true) { [weak self] _ in
-            self?.refreshState()
-        }
-        if let monitor { RunLoop.main.add(monitor, forMode: .common) }
+    private func observeWorkspace() {
+        let center = NSWorkspace.shared.notificationCenter
+        observers.append(center.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in self?.refreshState() })
+        observers.append(center.addObserver(
+            forName: NSWorkspace.didTerminateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in self?.refreshState() })
     }
 
     private func refreshState() {
         guard !showingFailure else { return }
         let exact = exactApplications()
         if exact.isEmpty {
-            missingChecks += 1
-            setBadge("…")
-            if targetPID != nil, missingChecks >= 3 { NSApp.terminate(nil) }
+            targetPID = nil
+            setBadge(launching ? "…" : nil)
+            if !launching { NSApp.terminate(nil) }
         } else if exact.count == 1, let running = exact.first {
             targetPID = running.processIdentifier
-            missingChecks = 0
-            let frontmost = NSWorkspace.shared.frontmostApplication?.processIdentifier == running.processIdentifier
-            setBadge(frontmost ? "▶" : "ON")
+            setBadge(isFrontmost(running) ? "▶" : "ON")
         } else {
-            showFailure("둘 이상의 일반 Chrome 프로세스가 같은 프로필과 일치합니다. 런처가 임의로 선택하지 않습니다.")
+            showFailure("둘 이상의 일반 Whale 프로세스가 같은 프로필과 일치합니다. 런처가 임의로 선택하지 않습니다.")
         }
     }
 
-    private func focusOrLaunch(url: String? = nil) {
+    private func focusOrLaunch() {
         guard let configuration, !showingFailure else { return }
         let exact = exactApplications()
         if exact.count > 1 {
-            showFailure("둘 이상의 일반 Chrome 프로세스가 같은 프로필과 일치합니다. 런처가 임의로 선택하지 않습니다.")
+            showFailure("둘 이상의 일반 Whale 프로세스가 같은 프로필과 일치합니다. 런처가 임의로 선택하지 않습니다.")
             return
         }
         if let running = exact.first {
             targetPID = running.processIdentifier
-            missingChecks = 0
-            if let url {
-                forwardURL(configuration, url: url, running: running)
-            } else {
+            if hasOnScreenWindow(running.processIdentifier) {
                 activate(running)
+            } else {
+                openWindow(configuration, running: running)
             }
             return
         }
-        launchChrome(configuration, url: url ?? configuration.startURL)
+        launchWhale(configuration)
     }
 
-    private func launchChrome(_ configuration: NormalChromeConfiguration, url: String) {
+    private func launchWhale(_ configuration: NormalWhaleConfiguration) {
         guard !launching else { return }
         launching = true
         setBadge("…")
         let openConfiguration = NSWorkspace.OpenConfiguration()
-        openConfiguration.arguments = configuration.arguments(url: url)
+        openConfiguration.arguments = configuration.arguments(url: configuration.startURL)
         openConfiguration.createsNewApplicationInstance = true
         openConfiguration.activates = true
         NSWorkspace.shared.openApplication(
-            at: URL(fileURLWithPath: configuration.chromeApp),
+            at: URL(fileURLWithPath: configuration.whaleApp),
             configuration: openConfiguration
-        ) { [weak self] running, error in
+        ) { [weak self] _, error in
             DispatchQueue.main.async {
                 guard let self else { return }
-                self.launching = false
                 if let error {
-                    self.showFailure("일반 Google Chrome을 시작하지 못했습니다: \(error.localizedDescription)")
+                    self.launching = false
+                    self.showFailure("일반 NAVER Whale을 시작하지 못했습니다: \(error.localizedDescription)")
                     return
                 }
-                if let running {
-                    self.targetPID = running.processIdentifier
-                    self.activate(running)
-                }
+                self.finishLaunchVerification(attempt: 0)
             }
         }
     }
 
-    private func forwardURL(
-        _ configuration: NormalChromeConfiguration,
-        url: String,
-        running: NSRunningApplication
-    ) {
+    private func finishLaunchVerification(attempt: Int) {
+        let exact = exactApplications()
+        if exact.count > 1 {
+            launching = false
+            showFailure("둘 이상의 일반 Whale 프로세스가 같은 프로필과 일치합니다. 런처가 임의로 선택하지 않습니다.")
+            return
+        }
+        if let running = exact.first {
+            launching = false
+            targetPID = running.processIdentifier
+            activate(running)
+            return
+        }
+        guard attempt < 30 else {
+            launching = false
+            showFailure("일반 NAVER Whale이 검증된 프로필로 시작되지 않았습니다.")
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.finishLaunchVerification(attempt: attempt + 1)
+        }
+    }
+
+    private func openWindow(_ configuration: NormalWhaleConfiguration, running: NSRunningApplication) {
         let task = Process()
-        task.executableURL = URL(fileURLWithPath: configuration.chromeExecutable)
-        task.arguments = configuration.arguments(url: url)
+        task.executableURL = URL(fileURLWithPath: configuration.whaleExecutable)
+        task.arguments = configuration.arguments(url: configuration.startURL)
         task.standardOutput = FileHandle.nullDevice
         task.standardError = FileHandle.nullDevice
         do {
             try task.run()
             activate(running)
         } catch {
-            showFailure("일반 Chrome 프로필로 링크를 전달하지 못했습니다: \(error.localizedDescription)")
+            showFailure("일반 Whale 프로필로 창을 열지 못했습니다: \(error.localizedDescription)")
         }
     }
 
     private func exactApplications() -> [NSRunningApplication] {
         guard let configuration else { return [] }
-        return NSRunningApplication.runningApplications(withBundleIdentifier: "com.google.Chrome").filter {
+        return NSRunningApplication.runningApplications(withBundleIdentifier: "com.naver.Whale").filter {
             isNormalCommand(commandLine($0.processIdentifier), configuration)
         }
     }
 
-    private func isNormalCommand(_ command: String, _ configuration: NormalChromeConfiguration) -> Bool {
-        guard command == configuration.chromeExecutable || command.hasPrefix(configuration.chromeExecutable + " ") else {
+    private func isNormalCommand(_ command: String, _ configuration: NormalWhaleConfiguration) -> Bool {
+        guard command == configuration.whaleExecutable || command.hasPrefix(configuration.whaleExecutable + " ") else {
             return false
         }
         guard !command.contains("--remote-debugging-port=") else { return false }
         let explicitRoot = command.contains("--user-data-dir=" + configuration.userData)
         let defaultRoot = !command.contains("--user-data-dir=")
         let explicitProfile = command.contains("--profile-directory=" + configuration.profile)
-        let defaultProfile = !command.contains("--profile-directory=") && configuration.profile == "Default"
+        let defaultProfile = !command.contains("--profile-directory=")
         return (explicitRoot || defaultRoot) && (explicitProfile || defaultProfile)
     }
 
@@ -215,11 +223,25 @@ final class NormalChromeDelegate: NSObject, NSApplicationDelegate {
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
+    private func hasOnScreenWindow(_ pid: pid_t) -> Bool {
+        let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+        guard let windows = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
+            return true
+        }
+        return windows.contains { item in
+            let owner = item[kCGWindowOwnerPID as String] as? Int
+            let layer = item[kCGWindowLayer as String] as? Int
+            return owner == Int(pid) && layer == 0
+        }
+    }
+
+    private func isFrontmost(_ running: NSRunningApplication) -> Bool {
+        NSWorkspace.shared.frontmostApplication?.processIdentifier == running.processIdentifier
+    }
+
     private func activate(_ running: NSRunningApplication) {
-        forwardingActivation = true
         _ = running.activate(options: [.activateAllWindows])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
-            self?.forwardingActivation = false
             self?.refreshState()
         }
     }
@@ -236,7 +258,7 @@ final class NormalChromeDelegate: NSObject, NSApplicationDelegate {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.alertStyle = .critical
-        alert.messageText = "일반 Chrome 런처 오류"
+        alert.messageText = "일반 Whale 런처 오류"
         alert.informativeText = message
         alert.runModal()
         NSApp.terminate(nil)
@@ -244,6 +266,6 @@ final class NormalChromeDelegate: NSObject, NSApplicationDelegate {
 }
 
 let app = NSApplication.shared
-let delegate = NormalChromeDelegate()
+let delegate = NormalWhaleDelegate()
 app.delegate = delegate
 app.run()
