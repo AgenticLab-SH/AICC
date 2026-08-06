@@ -80,6 +80,35 @@ test('OCX adapter summarizes official read-only CLI data for the AICC dashboard'
   assert.equal(status.sections.usage.requests, 12);
 });
 
+test('OCX adapter verifies core health before running bounded detail probes', async () => {
+  let corePending = 2;
+  let detailActive = 0;
+  let detailMaximum = 0;
+  let detailStartedEarly = false;
+  await ocxStatus({
+    executable: 'ocx-fixture',
+    readOnlyConcurrency: 2,
+    runCommand: async (_executable, args) => {
+      const key = args.join(' ');
+      if (key === '--version' || key === 'health --json') {
+        await new Promise(resolve => setTimeout(resolve, 5));
+        corePending -= 1;
+        return key === '--version'
+          ? { ok: true, stdout: 'opencodex 2.10.0\n' }
+          : { ok: true, stdout: JSON.stringify({ ok: true, port: 10100 }) };
+      }
+      if (corePending > 0) detailStartedEarly = true;
+      detailActive += 1;
+      detailMaximum = Math.max(detailMaximum, detailActive);
+      await new Promise(resolve => setTimeout(resolve, 5));
+      detailActive -= 1;
+      return { ok: true, stdout: '{}' };
+    }
+  });
+  assert.equal(detailStartedEarly, false);
+  assert.equal(detailMaximum, 2);
+});
+
 test('Codex route adapter separates native, Web GPT, and OCX recovery readiness', async () => {
   const files = new Map([
     ['/codex/config.toml', 'openai_base_url = "http://127.0.0.1:17841/v1"\n'],

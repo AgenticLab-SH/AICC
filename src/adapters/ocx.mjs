@@ -32,6 +32,21 @@ function command(executable, args) {
   return { executable, args };
 }
 
+async function mapWithConcurrency(items, limit, operation) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++;
+      try { results[index] = await operation(items[index], index); }
+      catch { results[index] = null; }
+    }
+  }
+  const workerCount = Math.max(1, Math.min(items.length, Number(limit) || 1));
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
 function moduleState(payload, result) {
   if (payload) return 'ready';
   if (result?.timedOut) return 'timeout';
@@ -66,13 +81,17 @@ export async function ocxStatus(options = {}) {
     diagnostics: command(executable, ['system', 'diagnostics', '--json']),
     endpoints: command(executable, ['access', 'endpoints', '--json'])
   };
-  const [version, health, ...readOnlyResults] = await Promise.all([
+  const [version, health] = await Promise.all([
     runner(versionSpec.executable, versionSpec.args, { timeoutMs: options.timeoutMs ?? 5_000 }),
-    runner(healthSpec.executable, healthSpec.args, { timeoutMs: options.timeoutMs ?? 5_000 }),
-    ...Object.values(readOnlySpecs).map(spec => Promise.resolve(runner(spec.executable, spec.args, {
-      timeoutMs: options.readOnlyTimeoutMs ?? 8_000
-    })).catch(() => null))
+    runner(healthSpec.executable, healthSpec.args, { timeoutMs: options.timeoutMs ?? 5_000 })
   ]);
+  const readOnlyResults = await mapWithConcurrency(
+    Object.values(readOnlySpecs),
+    options.readOnlyConcurrency ?? 3,
+    spec => Promise.resolve(runner(spec.executable, spec.args, {
+      timeoutMs: options.readOnlyTimeoutMs ?? 8_000
+    }))
+  );
 
   let healthPayload = null;
   if (health.ok) {
