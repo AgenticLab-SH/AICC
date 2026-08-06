@@ -15,8 +15,8 @@ test('dashboard architecture map separates the two MCP tunnel roles', () => {
 
 test('dashboard records the completed Web GPT full-harness edit proof', () => {
   assert.match(html, /비-Pro 8개 추론 \+ Full 로컬 작업/);
-  assert.match(html, /로컬 작업 성공 · 85\.08초/);
-  assert.match(html, /파일 패치 → 터미널 → `npm test` 1\/1 통과/);
+  assert.match(html, /자동 로컬 작업 성공 · 63\.11초/);
+  assert.match(html, /한국어 승인 → 파일 패치 → 터미널 → `npm test` 1\/1 통과/);
   assert.doesNotMatch(html, /로컬 편집은 아직 미검증/);
 });
 

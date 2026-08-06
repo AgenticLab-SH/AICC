@@ -27,8 +27,10 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 광고하지 않은 추론 smoke였다. 따라서 이 결과는 Web GPT 추론 경로 8/8 성공의
 증거다. 이어서 Full 하네스와 `Web GPT 작업 하네스` ChatGPT 커넥터를 연결한 뒤
 격리 프로젝트에서 `Web / 임시 / 높음`으로 실제 파일 패치, 터미널 명령과 테스트를
-검증했다. `src/status.js`를 Web 모델이 직접 수정했고 `npm test` 1/1 통과까지
-85.08초가 걸렸다. 이 시험에서는 OCX나 네이티브 모델 추론을 사용하지 않았다.
+검증했다. 최종 자동 승인 재시험에서 `src/status.js`를 Web 모델이 직접 수정했고
+터미널로 `npm test` 1/1 통과까지 63.11초가 걸렸다. 이 시험에서는 OCX나
+네이티브 모델 추론을 사용하지 않았다. 한국어 `허용하기` 카드와 도구 실행 뒤
+ChatGPT가 교체하는 DOM 블록도 브리지에서 안전하게 처리한다.
 - OpenAI Tunnel은 역할별로 분리한다. `AICC 원격 작업공간 MCP`는 외부 ChatGPT용이고,
   `Web GPT 작업 하네스 MCP`는 Codex Desktop Web 모델의 전체 하네스용이다. 기존 Workspace
   Tunnel을 전체 하네스에 재사용하지 않는다.
