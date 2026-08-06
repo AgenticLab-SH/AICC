@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { sanitize } from '../lib/redact.mjs';
 
 const WEB_MODELS = Object.freeze([
@@ -17,6 +18,24 @@ function configuredRoute(configFile) {
   try {
     const text = fs.readFileSync(configFile, 'utf8');
     return text.match(/^\s*openai_base_url\s*=\s*["']([^"']+)["']/m)?.[1] ?? null;
+  } catch { return null; }
+}
+
+function defaultTunnelStatus(cliPath) {
+  const result = spawnSync(cliPath, ['tunnel', 'status'], {
+    encoding: 'utf8', timeout: 12_000, windowsHide: true
+  });
+  if (result.status !== 0) return null;
+  try {
+    const parsed = JSON.parse(result.stdout);
+    const runtime = parsed?.runtime;
+    if (!runtime || typeof runtime !== 'object') return null;
+    return {
+      running: runtime.processRunning === true,
+      healthy: runtime.healthy === true,
+      ready: runtime.ready === true,
+      state: typeof runtime.state === 'string' ? runtime.state : null
+    };
   } catch { return null; }
 }
 
@@ -37,6 +56,7 @@ export async function webGptStatus(options = {}) {
   const configPath = options.configPath ?? path.join(stateRoot, 'config.json');
   const codexConfigPath = options.codexConfigPath ?? path.join(home, '.codex', 'config.toml');
   const appPath = options.appPath ?? '/Applications/Codex Web GPT.app';
+  const cliPath = options.cliPath ?? path.join(appPath, 'Contents', 'Resources', 'runtime', 'bin', 'codex-chatgpt-web');
   const config = readJson(configPath);
   const port = Number(config?.port || 17841);
   const baseUrl = `http://127.0.0.1:${port}/v1`;
@@ -49,19 +69,29 @@ export async function webGptStatus(options = {}) {
   const proAvailable = config?.proAvailable === true;
   const modelLabels = proAvailable ? [...WEB_MODELS, ...WEB_PRO_MODELS] : [...WEB_MODELS];
   const tunnelConfigured = Boolean(config?.tunnel);
+  const harnessConfigured = mode === 'full' && tunnelConfigured;
+  const tunnelRuntime = harnessConfigured
+    ? sanitize(await (options.tunnelStatus ?? defaultTunnelStatus)(cliPath))
+    : null;
+  const harnessReady = harnessConfigured && tunnelRuntime?.ready === true && runtime?.mode === 'full';
+  const state = healthy && routeActive && (mode !== 'full' || harnessReady)
+    ? 'ready'
+    : installed ? 'attention' : 'unavailable';
   return sanitize({
     id: 'web-gpt',
     label: 'Web GPT 모델 브리지',
     optional: !installed,
-    state: healthy && routeActive ? 'ready' : installed ? 'attention' : 'unavailable',
+    state,
     detail: !installed
       ? 'Web GPT v2 브리지가 설치되어 있지 않습니다.'
       : !healthy
         ? '브리지가 설치됐지만 현재 응답하지 않습니다.'
         : !routeActive
           ? '브리지는 실행 중이지만 Codex 모델 경로가 아직 연결되지 않았습니다.'
-          : mode === 'full'
-            ? 'Web GPT 모델과 Codex 도구 하네스가 연결되어 있습니다.'
+          : mode === 'full' && harnessReady
+            ? 'Web GPT 모델과 현재 Codex 도구 하네스용 전용 Tunnel이 준비되어 있습니다.'
+            : mode === 'full'
+              ? '전체 하네스 설정은 있지만 전용 Tunnel 런타임이 아직 준비되지 않았습니다.'
             : 'Web GPT 모델이 연결되어 있습니다. 로컬 도구는 전체 하네스 MCP를 구성한 뒤 사용할 수 있습니다.',
     installed,
     healthy,
@@ -71,6 +101,12 @@ export async function webGptStatus(options = {}) {
     mode,
     browserHost: config?.browserHost ?? null,
     tunnelConfigured,
+    harnessConfigured,
+    harnessReady,
+    tunnelRuntime,
+    connectorVerification: harnessReady ? 'chatgpt-required' : 'not-ready',
+    connectorName: harnessConfigured ? config?.appName ?? 'Codex Native' : null,
+    harnessScope: 'current-codex-project',
     proAvailable,
     autoApproveToolCalls: config?.autoApproveToolCalls === true,
     activeHttpTurns: runtime?.active_http_turns ?? null,

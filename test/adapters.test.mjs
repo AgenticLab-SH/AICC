@@ -57,11 +57,14 @@ test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex rout
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const configPath = path.join(root, 'config.json');
   const codexConfigPath = path.join(root, 'codex.toml');
-  fs.writeFileSync(configPath, JSON.stringify({ port: 17841, releaseVersion: '2.0.0', mode: 'full', browserHost: 'launcher' }));
+  fs.writeFileSync(configPath, JSON.stringify({
+    port: 17841, releaseVersion: '2.0.0', mode: 'full', browserHost: 'launcher', tunnel: { configured: true }
+  }));
   fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:10100/v1"\n');
   const status = await webGptStatus({
     configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
-    fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0', active_browser_turns: 0 }) })
+    fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0', mode: 'full', active_browser_turns: 0 }) }),
+    tunnelStatus: async () => ({ running: true, healthy: true, ready: true, state: 'ready' })
   });
   assert.equal(status.healthy, true);
   assert.equal(status.routeActive, false);
@@ -70,6 +73,8 @@ test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex rout
   assert.ok(status.modelLabels.includes('Web / 임시 / 매우 높음'));
   assert.equal(status.modelLabels.some(label => label.endsWith('/ Pro')), false);
   assert.equal(status.localHarnessConsumesModelTokens, false);
+  assert.equal(status.harnessReady, true);
+  assert.equal(status.tunnelRuntime.ready, true);
 });
 
 test('Web GPT adapter does not claim local harness tools in browser-only mode', async t => {
@@ -86,6 +91,28 @@ test('Web GPT adapter does not claim local harness tools in browser-only mode', 
   assert.equal(status.state, 'ready');
   assert.match(status.detail, /로컬 도구는 전체 하네스 MCP/);
   assert.doesNotMatch(status.detail, /도구 하네스가 연결/);
+  assert.equal(status.harnessConfigured, false);
+  assert.equal(status.harnessReady, false);
+});
+
+test('Web GPT adapter reports attention when full harness tunnel is not ready', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-web-gpt-full-degraded-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.json');
+  const codexConfigPath = path.join(root, 'codex.toml');
+  fs.writeFileSync(configPath, JSON.stringify({
+    port: 17841, releaseVersion: '2.0.0', mode: 'full', tunnel: { configured: true }, appName: 'Codex Native'
+  }));
+  fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
+  const status = await webGptStatus({
+    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
+    fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0', mode: 'full' }) }),
+    tunnelStatus: async () => ({ running: true, healthy: false, ready: false, state: 'starting' })
+  });
+  assert.equal(status.state, 'attention');
+  assert.equal(status.harnessConfigured, true);
+  assert.equal(status.harnessReady, false);
+  assert.match(status.detail, /아직 준비되지/);
 });
 
 test('OCX account adapter exposes only safe account metadata', async () => {

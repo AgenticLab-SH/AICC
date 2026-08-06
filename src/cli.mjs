@@ -41,6 +41,8 @@ Usage:
                        AICC 정본 Codex 하위 에이전트 관리
   aicc workspace configure|status|serve
                        Secure Tunnel용 로컬 워크스페이스 MCP 관리
+  aicc web-gpt status|doctor|open-connectors
+                       Codex Web GPT 전체 하네스 상태와 커넥터 확인
   aicc guidance plan    Codex·Claude 지침 배포 변경 미리보기
   aicc guidance deploy  AICC 정본 지침과 스킬을 두 홈에 배포
   aicc guidance check   정본·배포본·manifest 정합성 검사
@@ -282,6 +284,37 @@ async function main() {
       return;
     }
     throw new Error(`알 수 없는 workspace 명령: ${subcommand}`);
+  }
+  if (command === 'web-gpt') {
+    const subcommand = process.argv[3] || 'status';
+    if (subcommand === 'status') {
+      const status = await collectStatus();
+      const result = status.components.find(component => component.id === 'web-gpt');
+      if (process.argv.includes('--json')) console.log(JSON.stringify(result, null, 2));
+      else console.log(`${result?.state === 'ready' ? '✓' : '!'} ${result?.detail || '상태를 확인할 수 없습니다.'}`);
+      if (result?.state !== 'ready') process.exitCode = 1;
+      return;
+    }
+    if (subcommand === 'doctor') {
+      const executable = process.env.CODEX_CHATGPT_WEB_CLI?.trim()
+        || (process.platform === 'darwin'
+          ? '/Applications/Codex Web GPT.app/Contents/Resources/runtime/bin/codex-chatgpt-web'
+          : 'codex-chatgpt-web');
+      const result = spawnSync(executable, ['doctor', ...(process.argv.includes('--json') ? ['--json'] : [])], {
+        encoding: 'utf8', timeout: 75_000, windowsHide: true
+      });
+      if (result.error) throw result.error;
+      process.stdout.write(result.stdout || '');
+      if (result.stderr) process.stderr.write(result.stderr);
+      if (result.status !== 0) process.exitCode = result.status ?? 1;
+      return;
+    }
+    if (subcommand === 'open-connectors') {
+      openBrowser('https://chatgpt.com/#settings/Connectors');
+      console.log('ChatGPT 커넥터 설정을 여는 중입니다.');
+      return;
+    }
+    throw new Error(`알 수 없는 web-gpt 명령: ${subcommand}`);
   }
   if (command === 'start') {
     startServer();

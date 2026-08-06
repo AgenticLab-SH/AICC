@@ -13,8 +13,14 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 - 지침: AICC 정본과 Codex·Claude 배포본 일치, Codex agent는 `luna_worker` 1개
 - 브라우저: 기본 HTTP/HTTPS는 CDP Whale 9335, 브라우저 정책 20/20 통과
 - Web GPT 앱: v2.0.0-aicc.1, 전용 프로필 로그인·High 동작 시험·17841 bridge와
-  Codex 모델 route 활성화 완료. 현재는 브라우저 전용 모드이며, 전체 Codex 도구
-  하네스용 별도 MCP Tunnel 연결은 아직 구성하지 않음
+  Codex 모델 route 활성화 완료
+- OpenAI Tunnel은 역할별로 분리한다. `AICC Workspace`는 외부 ChatGPT용이고,
+  `Codex Native MCP`는 Codex Desktop Web 모델의 전체 하네스용이다. 기존 Workspace
+  Tunnel을 전체 하네스에 재사용하지 않는다.
+- 전체 하네스의 실시간 완료 여부는 스냅샷 문구가 아니라
+  `aicc web-gpt status --json`의 `harnessReady`와 `aicc web-gpt doctor --json`으로
+  판정한다. `connectorVerification=chatgpt-required`면 ChatGPT에서 커넥터를 1회
+  검증해야 한다.
 
 실시간 상태는 다음 명령으로 다시 확인한다.
 
@@ -22,6 +28,8 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 aicc status --json
 aicc workspace status
 aicc guidance check
+aicc web-gpt status --json
+aicc web-gpt doctor --json
 ocx status
 ocx health
 curl -fsS http://127.0.0.1:17841/healthz
@@ -30,21 +38,23 @@ curl -fsS http://127.0.0.1:17841/healthz
 ## 세 가지 Codex 모델 경로와 외부 Workspace 경로
 
 ```text
-Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델)
-                                  \-> OCX 10100 (Web 외 모델 전달)
+Codex Desktop -> Web GPT bridge 17841 -> ChatGPT Web (Web 모델 추론)
+                 |                         \-> Codex Native MCP 전용 Tunnel
+                 |                             -> 현재 Codex 작업 도구
+                 \-> OCX 10100 (Web 외 모델 전달)
 
 Native Codex profile -> OpenAI 공식 Codex endpoint
 
-외부 ChatGPT -> OpenAI Secure MCP Tunnel -> AICC Workspace MCP (STDIO)
-                                            -> 등록 Git workspace
+외부 ChatGPT -> AICC Workspace 전용 Tunnel -> AICC Workspace MCP (STDIO)
+                                             -> 등록 Git workspace
 ```
 
 | 경로 | 역할 | 추론 비용·상태 |
 |---|---|---|
-| Web GPT 17841 | Codex 모델 선택기에서 ChatGPT Web 사용 | Web 모델 추론은 로그인한 ChatGPT Web만 사용한다. OCX 모델 추론은 호출하지 않는다. |
+| Web GPT 17841 | Codex 모델 선택기에서 ChatGPT Web 사용 | Web 모델 추론은 로그인한 ChatGPT Web만 사용한다. OCX 모델 추론은 호출하지 않는다. 전체 하네스는 별도 Codex Native MCP Tunnel을 쓴다. |
 | OCX 10100 | OpenAI/Kiro 등 기존 Codex 모델 라우팅 | OCX 계정·provider·quota를 사용한다. |
 | Native Codex | 공식 Codex endpoint 복구 경로 | OCX와 Web GPT를 거치지 않는다. |
-| AICC Workspace | 폰·웹 ChatGPT에서 등록 로컬 프로젝트 편집 | 모델 API를 호출하지 않는다. ChatGPT가 모델이고 MCP는 로컬 도구 경로다. |
+| AICC Workspace | 폰·웹 ChatGPT에서 등록 로컬 프로젝트 편집 | 별도 Tunnel을 쓴다. 모델 API를 호출하지 않는다. ChatGPT가 모델이고 MCP는 로컬 도구 경로다. |
 
 인증과 런타임은 분리하지만 Codex Desktop 설정에는 한 시점에 하나의 전역
 `openai_base_url`만 적용된다. Web GPT를 활성화하면 17841이 앞단에서 Web 모델을
@@ -73,7 +83,8 @@ Web GPT, Workspace MCP, 브라우저와 지침 상태를 한 화면에서 읽는
 계정에 Pro가 실제로 노출되고 사용자가 명시 승인한 경우에만 임시·저장 Pro를
 추가한다. `매우 높음`은 Pro 전용이 아니다. 브라우저 전용 모드에서도 현재 Codex
 대화 문맥과 이미지는 전달되지만 로컬 파일, 터미널과 Codex 도구 호출은 노출되지
-않는다. 별도 MCP Tunnel과 ChatGPT 커넥터를 구성해 전체 하네스 모드로 전환한 뒤에만
+않는다. 별도 `Codex Native MCP` Tunnel과 ChatGPT 커넥터를 구성해 전체 하네스
+모드로 전환한 뒤에만
 Codex Desktop이 현재 프로젝트, 파일 패치, 터미널, 승인과 도구 호출을 담당하고 모델
 추론만 ChatGPT Web에서 수행한다.
 
@@ -98,6 +109,13 @@ packet 안에서 필요한 범위로 매 turn 전달된다. 숨은 인증 자료
 수 없다. raw Node REPL처럼 프로젝트 경계를 우회할 수 있는 도구는 노출하지 않는다.
 Web GPT가 직접 하위 Web GPT를 자동 생성하는 기능은 기본값이 아니며, 느린 다중
 에이전트를 자동 실행하지 않는다.
+
+전체 하네스에서 로컬 도구를 실행해도 추론 주체는 ChatGPT Web 하나다. Codex
+Desktop은 현재 프로젝트 경계, 도구 스키마, 승인 UI와 실행 결과 전달을 담당할 뿐
+별도의 Codex/OCX 모델 응답을 생성하지 않는다. 따라서 Web 모델이 AICC 저장소를
+현재 프로젝트로 연 작업에서는 AICC MCP 소스도 읽고 패치하고 테스트할 수 있다.
+반대로 다른 프로젝트 작업에서 임의 절대 경로로 AICC에 탈출하는 것은 허용하지
+않는다.
 
 ## 외부 ChatGPT에서 AICC Workspace 사용
 
@@ -161,6 +179,10 @@ Web GPT setup은 기존 loopback upstream과 catalog를 읽어 10100 OCX route�
 | `codex-chatgpt-web` | AICC fork v2를 Web 모델 브리지로 유지 |
 | CodexPro | 현재 런타임에서 미사용, 복구 대상 아님 |
 | `Waishnav/devspace` | 범용 workspace 아이디어만 참고, 의존성 미채택 |
+
+`devspace`는 현재 설치·실행·서브모듈 의존성이 아니다. workspace 제어 아이디어만
+검토했고, 필요한 기능은 AICC 소유의 `components/workspace-mcp`로 다시 구현했다.
+`codex-chatgpt-web`과 코드로 융합된 것도 아니다.
 
 AICC `guidance/`가 지침·스킬·agent의 정본이며 Codex·Claude home에는 생성본만
 배포한다. 인증, task DB와 런타임 cache는 각 제품의 native home에 둔다. public

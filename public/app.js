@@ -281,6 +281,9 @@ function renderStatus(data) {
   $('#webGptIndicator').classList.toggle('online', webGpt?.state === 'ready');
   $('#webGptVersion').textContent = webGpt?.version || '미확인';
   $('#webGptMode').textContent = webGpt?.mode === 'full' ? '전체 Codex 하네스' : webGpt?.mode === 'browser-only' ? '브라우저 전용' : '미설정';
+  $('#webGptHarness').textContent = webGpt?.harnessReady ? '현재 프로젝트 도구 사용 가능' : webGpt?.harnessConfigured ? 'Tunnel 확인 필요' : '구성 전';
+  $('#webGptTunnel').textContent = webGpt?.tunnelRuntime?.ready ? '준비됨' : webGpt?.tunnelRuntime?.running ? '연결 대기' : webGpt?.harnessConfigured ? '중지' : '미구성';
+  $('#webGptConnector').textContent = webGpt?.connectorVerification === 'chatgpt-required' ? 'ChatGPT에서 1회 검증' : '하네스 준비 후 확인';
   $('#webGptTurns').textContent = Number.isInteger(webGpt?.activeBrowserTurns) ? `${webGpt.activeBrowserTurns}/${webGpt.maxConcurrentTurns}` : '–';
   const modelLabels = webGpt?.modelLabels || [];
   $('#webGptModelCount').textContent = `${modelLabels.length}개`;
