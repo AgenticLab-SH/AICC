@@ -1,0 +1,4 @@
+interface:
+  display_name: "Web GPT 활용"
+  short_description: "검증된 컨텍스트·첨부로 Web GPT 조사와 독립 검토"
+  default_prompt: "Use $use-web-gpt to prepare a bounded context packet, safely attach only the necessary files, keep the task-owned chat clearly titled, and obtain an independently verifiable Web GPT analysis through the verified browser session."

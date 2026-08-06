@@ -1,0 +1,21 @@
+:root {
+  color-scheme: light dark;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+body { margin: 0; min-width: 280px; background: Canvas; color: CanvasText; }
+main { padding: 16px; }
+h1 { margin: 0 0 8px; font-size: 17px; }
+#current { margin: 0 0 12px; color: GrayText; }
+#choices { display: grid; gap: 8px; }
+button {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 9px 10px;
+  border: 1px solid color-mix(in srgb, CanvasText 18%, transparent); border-radius: 9px;
+  background: color-mix(in srgb, Canvas 92%, CanvasText 8%); color: CanvasText;
+  font: inherit; text-align: left; cursor: pointer;
+}
+button:hover, button[aria-pressed="true"] { border-color: #2563eb; background: color-mix(in srgb, #2563eb 14%, Canvas); }
+button span {
+  display: inline-grid; place-items: center; width: 28px; height: 22px; border-radius: 7px;
+  background: #1f2937; color: white; font-size: 12px; font-weight: 700;
+}
+.privacy { margin: 13px 0 0; font-size: 11px; line-height: 1.4; color: GrayText; }

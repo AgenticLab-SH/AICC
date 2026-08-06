@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+# OpenCodex is an external pinned submodule and is scanned by its own upstream
+# repository. AICC secret scanning covers only files owned by this repository.
+[[allowlists]]
+description = "External pinned OpenCodex submodule working tree"
+paths = ['''vendor/opencodex/.*''']

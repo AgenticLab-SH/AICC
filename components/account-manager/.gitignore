@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Never commit local machine state or credentials.
+config.toml
+*.env
+*.env.*
+!*.env.example
+config.local.toml
+.local/
+runtime/
+pending/
+auth.json
+.DS_Store
+dist/
+*.egg-info/
+
+# Local maintainer notes and application drafts; never publish account details.
+.private/

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Browser QA"
+  short_description: "Test pages with native browser evidence"
+  default_prompt: "Use $browser-qa to test this page with the current host's native browser capability and report interaction, screenshot, console, and network evidence."

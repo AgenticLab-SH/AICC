@@ -1,0 +1,2 @@
+# Intentional fake GitHub token in the Web GPT secret-rejection regression test.
+a5e3904323881567e97ac9597f120601b9fa125f:guidance/skills/use-web-gpt/scripts/test_prepare_context_bundle.py:generic-api-key:69

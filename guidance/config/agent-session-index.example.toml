@@ -1,0 +1,15 @@
+# Copy to ~/.ai-control-center/guidance/agent-session-index.toml to customize.
+
+[[roots]]
+agent = "Codex"
+kind = "session-log"
+path = "~/.codex/sessions"
+pattern = "rollout-*.jsonl"
+recursive = true
+
+[[roots]]
+agent = "Claude"
+kind = "project-session-log"
+path = "~/.claude/projects"
+pattern = "*.jsonl"
+recursive = true

@@ -1,0 +1,4 @@
+interface:
+  display_name: "통합 메일 읽기"
+  short_description: "Gmail·네이버를 함께 검색하는 읽기 전용 라우터"
+  default_prompt: "Use $read-mail to search or compare my configured Gmail and Naver Mail accounts together without changing mailbox state."

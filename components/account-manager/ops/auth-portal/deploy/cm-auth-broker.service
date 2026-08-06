@@ -1,0 +1,23 @@
+[Unit]
+Description=CM asynchronous Codex authentication broker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=cm-auth
+Group=cm-auth
+EnvironmentFile=/etc/cm-auth-broker.env
+Environment=HOME=/var/lib/cm-auth-broker
+ExecStart=/usr/bin/python3 /opt/cm-auth-broker/broker.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/cm-auth-broker
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,32 @@
+# Copy to ~/.ai-control-center/guidance/coordination.toml and fill in only
+# browser slots that this machine owns. Paths and account labels are private.
+
+[browser]
+cdp_lease_ttl_seconds = 600
+cdp_targets_per_slot = 3
+cdp_slot_count = 2
+cdp_slot1_port = 9222
+cdp_slot1_profile_dir = "/absolute/path/to/a/dedicated/browser-profile"
+cdp_slot1_profile_directory = "Default"
+cdp_slot1_launcher = "/absolute/path/to/the/registered/launcher"
+cdp_slot1_account_alias = "account-a"
+cdp_slot1_workspace = "workspace-a"
+cdp_slot1_usage = "agent_authenticated_shared"
+cdp_slot2_port = 9223
+cdp_slot2_profile_dir = "/absolute/path/to/a/second/dedicated/browser-profile"
+cdp_slot2_profile_directory = "Default"
+cdp_slot2_launcher = "/absolute/path/to/the/second/registered/launcher"
+cdp_slot2_account_alias = "account-b"
+cdp_slot2_workspace = "workspace-b"
+cdp_slot2_usage = "agent_authenticated_shared"
+web_gpt_new_chat_account_alias = "account-a"
+web_gpt_new_chat_workspace = "workspace-a"
+web_gpt_new_chat_surface = "codex_desktop_in_app_browser"
+web_gpt_existing_chat_account_alias = "account-b"
+web_gpt_existing_chat_surface = "registered_cdp_chrome_extension"
+codex_chrome_extension_profile = "registered-cdp-slot-for-account-b"
+codex_chrome_extension_exclusive = true
+web_gpt_secondary_existing_chat_account_alias = "account-a"
+web_gpt_secondary_existing_chat_surface = "codex_desktop_in_app_browser"
+cdp_qa_port = 9224
+cdp_qa_profile_dir = "${AICC_STATE_ROOT}/browser/isolated-qa/profile"

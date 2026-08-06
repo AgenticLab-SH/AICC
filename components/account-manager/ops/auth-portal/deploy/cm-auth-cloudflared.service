@@ -1,0 +1,19 @@
+[Unit]
+Description=Cloudflare Tunnel for the CM authentication portal
+After=network-online.target cm-auth-broker.service
+Wants=network-online.target
+Requires=cm-auth-broker.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/cloudflared --no-autoupdate --config /etc/cloudflared/config.yml tunnel run
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/cloudflared
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

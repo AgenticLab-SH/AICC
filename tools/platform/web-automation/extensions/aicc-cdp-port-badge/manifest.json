@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "AICC CDP Port Badge",
+  "version": "1.0.0",
+  "description": "Shows the configured AICC CDP slot without reading web pages.",
+  "permissions": [
+    "storage"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "action": {
+    "default_title": "AICC CDP port",
+    "default_popup": "popup.html"
+  }
+}

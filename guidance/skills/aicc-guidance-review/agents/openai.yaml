@@ -1,0 +1,6 @@
+interface:
+  display_name: "AICC 지침 변경 검토"
+  short_description: "에이전트 생태계 변경의 배치·충돌·검증·롤백 감사"
+  default_prompt: "Use $aicc-guidance-review to review this proposed AICC guidance change and return the smallest justified placement, validation, and rollback decision."
+policy:
+  allow_implicit_invocation: false

@@ -1,0 +1,25 @@
+# Codex Account Manager — optional integrations.
+#
+# Copy to ~/.codex-multi/config.toml and uncomment only what you need.
+# The tool works with this file absent; every entry below is opt-in.
+# Never put tokens, passwords or account credentials in here — cm reads
+# credentials from Codex's own auth store, not from this file.
+
+[proxy]
+# Local opencodex (`ocx`) proxy. Used read-only, to report routing state.
+# base_url = "http://127.0.0.1:10100"
+
+[codex]
+# The real `codex` executable, when PATH resolution is not enough
+# (for example when a wrapper of the same name shadows it).
+# executable = "/opt/homebrew/bin/codex"
+
+[stack]
+# `cm stack apply` runs this command. There is no built-in updater: a safe one
+# needs backup and rollback steps specific to your machine.
+# update_command = ["pwsh", "-NoProfile", "-File", "C:/path/to/Update-Stack.ps1", "-Action", "Apply"]
+
+# An optional companion git checkout whose freshness `cm stack` reports.
+# gateway_repo = "~/dev/some-gateway"
+# gateway_port = 8765
+# gateway_label = "gateway"

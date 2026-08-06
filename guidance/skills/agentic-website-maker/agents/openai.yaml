@@ -1,0 +1,4 @@
+interface:
+  display_name: "Agentic Website Maker"
+  short_description: "Build, migrate, secure, publish, and register branded websites"
+  default_prompt: "Use $agentic-website-maker to build or improve this website, select the recorded hosting provider, publish only safe production assets under my domain, verify DNS and indexing, and record the release."

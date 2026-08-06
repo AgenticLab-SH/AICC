@@ -1,0 +1,4 @@
+interface:
+  display_name: "Oracle Server Safe Ops"
+  short_description: "Safely operate existing Oracle Linux servers."
+  default_prompt: "Use $oracle-server-safe-ops to audit or deploy to an existing Oracle Cloud Linux server without exposing secrets, creating paid resources, opening ports, or disrupting unrelated services."

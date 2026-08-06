@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Usage and Reset Credits"
+  short_description: "Read Codex quota, reset times, and token usage"
+  default_prompt: "Check my Codex rate-limit usage, automatic reset time, Full reset credits and expiries, and token usage without consuming credits."

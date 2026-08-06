@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Control Center</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <a class="skip-link" href="#mainContent">본문으로 이동</a>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="주요 메뉴">
+      <a class="brand" href="#home" aria-label="AI Control Center 홈"><span class="brand-mark">A</span><span><strong>AICC</strong><small>AI Control Center</small></span></a>
+      <nav>
+        <a class="nav-link active" href="#home"><span aria-hidden="true">⌂</span>홈</a>
+        <a class="nav-link" href="#tools"><span aria-hidden="true">⌕</span>모든 도구</a>
+        <a class="nav-link" href="#accounts"><span aria-hidden="true">◎</span>계정</a>
+        <a class="nav-link" href="#controls"><span aria-hidden="true">◇</span>연결 제어</a>
+        <a class="nav-link" href="#system"><span aria-hidden="true">◌</span>시스템</a>
+      </nav>
+      <div class="local-note"><span class="status-dot"></span><span><strong>이 컴퓨터에서만 실행</strong><small>외부 네트워크에 공개되지 않음</small></span></div>
+    </aside>
+
+    <main id="mainContent">
+      <header class="topbar" id="home">
+        <div><p class="eyebrow">LOCAL AI OPERATIONS</p><h1>무엇을 할까요?</h1><p class="lead">명령어를 외우지 말고, 하고 싶은 일을 찾아 실행하세요.</p></div>
+        <button id="refresh" class="icon-button" type="button" aria-label="모든 상태 새로 확인" title="상태 새로 확인">↻</button>
+      </header>
+
+      <section class="command-search" aria-labelledby="searchTitle">
+        <label for="toolSearch" id="searchTitle"><span aria-hidden="true">⌕</span><span class="sr-only">도구 검색</span></label>
+        <input id="toolSearch" type="search" autocomplete="off" placeholder="예: 계정 바꾸기, 지침 점검, 로컬 작업공간" aria-controls="searchResults" aria-expanded="false" aria-autocomplete="list">
+        <kbd>⌘ K</kbd>
+        <div id="searchResults" class="search-results" role="listbox" aria-label="검색 결과" hidden></div>
+      </section>
+
+      <section class="summary-board" aria-labelledby="summaryTitle">
+        <div class="summary-copy"><p id="summaryTitle">현재 상태</p><strong id="summaryCount">확인 중</strong><span id="summaryHint">연결 상태를 확인하고 있습니다.</span></div>
+        <div class="summary-meter" aria-hidden="true"><svg viewBox="0 0 42 42"><circle class="meter-track" cx="21" cy="21" r="15.9"></circle><circle id="summaryRing" class="meter-value" cx="21" cy="21" r="15.9"></circle></svg><span id="summaryPercent">–</span></div>
+        <span id="updatedAt" class="updated-at"></span>
+      </section>
+
+      <section aria-labelledby="quickTitle">
+        <div class="section-title"><div><p class="eyebrow">QUICK START</p><h2 id="quickTitle">자주 쓰는 기능</h2></div><a href="#tools">모두 보기</a></div>
+        <div id="quickTools" class="quick-grid" aria-live="polite"></div>
+      </section>
+
+      <section id="tools" class="anchor-section" aria-labelledby="toolsTitle">
+        <div class="section-title"><div><p class="eyebrow">TOOL LIBRARY</p><h2 id="toolsTitle">모든 도구</h2></div><span>하나의 목록에서 찾고 실행</span></div>
+        <div id="toolFilters" class="filter-row" role="group" aria-label="도구 분류"></div>
+        <div id="toolLibrary" class="tool-library" aria-live="polite"></div>
+      </section>
+
+      <section id="accounts" class="anchor-section" aria-labelledby="accountsTitle">
+        <div class="section-title"><div><p class="eyebrow">ACCOUNTS</p><h2 id="accountsTitle">계정 관리</h2></div><span>인증 토큰과 로그인 파일은 표시하지 않음</span></div>
+        <h3 class="account-heading">기본 GPT Desktop 계정</h3>
+        <div class="account-layout">
+          <div id="accountCards" class="account-cards" aria-live="polite"></div>
+          <article class="panel account-switcher">
+            <span class="panel-icon">◎</span><h3>기본 계정 바꾸기</h3><p>GPT Desktop을 안전하게 다시 시작해 선택한 계정으로 전환합니다.</p>
+            <label for="accountSelector">전환할 계정</label>
+            <select id="accountSelector"><option value="">계정 상태 확인 중</option></select>
+            <button id="switchAccount" type="button">변경 내용 먼저 보기</button>
+          </article>
+        </div>
+        <h3 class="account-heading">OCX 라우팅 계정</h3>
+        <div class="account-layout">
+          <div id="ocxAccountCards" class="account-cards" aria-live="polite"></div>
+          <article class="panel account-switcher">
+            <span class="panel-icon">O</span><h3>새 작업의 계정 바꾸기</h3><p>실행 중인 작업은 유지하고, 이후 시작되는 OCX 작업의 계정만 바꿉니다.</p>
+            <label for="ocxAccountSelector">전환할 OCX 계정</label>
+            <select id="ocxAccountSelector"><option value="">OCX 계정 상태 확인 중</option></select>
+            <button id="switchOcxAccount" type="button">변경 내용 먼저 보기</button>
+          </article>
+        </div>
+      </section>
+
+      <section id="controls" class="anchor-section" aria-labelledby="controlsTitle">
+        <div class="section-title"><div><p class="eyebrow">SAFE CONTROL</p><h2 id="controlsTitle">OCX 연결 제어</h2></div><span>미리보기 후 한 번 더 확인</span></div>
+        <article class="panel provider-control">
+          <div><span id="ocxIndicator" class="large-status offline"></span><div><h3>모델 연결</h3><p id="ocxDetail">OCX 상태 확인 중</p></div></div>
+          <div class="button-row"><button type="button" data-action="ocx.start">시작</button><button type="button" data-action="ocx.sync" class="secondary">모델 맞추기</button><button type="button" data-action="ocx.stop" class="danger ghost">중지</button></div>
+        </article>
+        <p id="actionMessage" class="action-message" role="status" aria-live="polite"></p>
+      </section>
+
+      <section id="system" class="anchor-section" aria-labelledby="systemTitle">
+        <div class="section-title"><div><p class="eyebrow">SYSTEM</p><h2 id="systemTitle">연결 상태와 데이터</h2></div><span id="componentUpdated"></span></div>
+        <div id="components" class="component-grid" aria-live="polite"></div>
+        <details class="data-details"><summary>데이터 위치 보기 <span>로그인 자료는 원래 위치에 유지됩니다.</span></summary><div id="stateRoots" class="paths"></div></details>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="resultDialog" class="result-dialog" aria-labelledby="resultTitle">
+    <form method="dialog"><div class="dialog-head"><div><p class="eyebrow">RESULT</p><h2 id="resultTitle">실행 결과</h2></div><button value="cancel" class="icon-button" aria-label="결과 창 닫기">×</button></div><p id="resultSummary" class="dialog-impact"></p><div id="resultHighlights" class="result-highlights"></div><details id="resultDetails" class="result-details"><summary>기술 정보 보기</summary><pre id="resultOutput" tabindex="0"></pre></details><div class="dialog-buttons"><button value="cancel">닫기</button></div></form>
+  </dialog>
+
+  <dialog id="actionDialog">
+    <form method="dialog">
+      <p class="eyebrow">CHANGE PREVIEW</p>
+      <h2 id="dialogTitle">작업 확인</h2>
+      <p id="dialogImpact" class="dialog-impact"></p>
+      <ul id="dialogWarnings"></ul>
+      <p id="dialogRollback" class="rollback"></p>
+      <p class="confirmation-note">이 미리보기는 잠시만 유효하며 한 번만 실행할 수 있습니다.</p>
+      <div class="dialog-buttons"><button value="cancel" class="secondary">취소</button><button id="confirmAction" value="default">확인하고 실행</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

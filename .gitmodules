@@ -1,0 +1,3 @@
+[submodule "vendor/opencodex"]
+	path = vendor/opencodex
+	url = https://github.com/lidge-jun/opencodex.git

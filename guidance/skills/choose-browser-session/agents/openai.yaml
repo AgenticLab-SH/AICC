@@ -1,0 +1,4 @@
+interface:
+  display_name: "브라우저 세션 선택"
+  short_description: "내장 Browser 우선, 필요 시 Chrome·Whale 안전 선택"
+  default_prompt: "Use $choose-browser-session to prefer the Codex in-app Browser and safely select Chrome or Whale only when their conditions are met."

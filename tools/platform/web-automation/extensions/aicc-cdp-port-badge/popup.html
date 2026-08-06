@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AICC CDP Port Badge</title>
+    <link rel="stylesheet" href="popup.css">
+  </head>
+  <body>
+    <main>
+      <h1>CDP port badge</h1>
+      <p id="current" aria-live="polite">Reading local setting…</p>
+      <div id="choices" role="group" aria-label="CDP port">
+        <button type="button" data-slot="9222"><span>22</span>CDP Chrome 9222</button>
+        <button type="button" data-slot="9223"><span>23</span>CDP Chrome 9223</button>
+        <button type="button" data-slot="9335"><span>35</span>CDP Whale 9335</button>
+      </div>
+      <p class="privacy">Local display setting only. No page, tab, history, cookie, or site access.</p>
+    </main>
+    <script src="badge-config.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

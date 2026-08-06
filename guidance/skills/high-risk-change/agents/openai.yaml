@@ -1,0 +1,4 @@
+interface:
+  display_name: "High-Risk Change"
+  short_description: "Fix intent and a short execution contract before costly changes"
+  default_prompt: "This touches authentication and a schema migration. Set the execution contract first, then implement."

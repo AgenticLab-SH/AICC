@@ -1,0 +1,22 @@
+# Public, portable Codex and Claude guidance deployment policy.
+
+[deployment_policy]
+default_groups = ["codex", "claude"]
+optional_mode = "none"
+manifest_name = ".aicc-guidance-deployment.json"
+legacy_manifest_names = []
+prune_policy = "remove-only-manifest-owned-content"
+
+[[deployment_targets]]
+id = "codex"
+default = true
+skills = [".codex/skills"]
+rules = [".codex/AGENTS.md"]
+generated = ["guidance/directives/generated/codex/AGENTS.md"]
+
+[[deployment_targets]]
+id = "claude"
+default = true
+skills = [".claude/skills"]
+rules = [".claude/AGENTS.md", ".claude/CLAUDE.md"]
+generated = ["guidance/directives/generated/claude/AGENTS.md", "guidance/directives/generated/claude/CLAUDE.md"]

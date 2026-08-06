@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "registry_path": "website-projects.json",
+  "project_profile_path": ".openai/website-profile.json",
+  "workspace_root": "~/dev/projects/web",
+  "allowed_root_domains": ["example.com"],
+  "default_hosting_provider": "cloudflare-pages",
+  "supported_hosting_providers": [
+    "cloudflare-pages",
+    "cloudflare-worker",
+    "firebase-hosting",
+    "openai-sites"
+  ]
+}

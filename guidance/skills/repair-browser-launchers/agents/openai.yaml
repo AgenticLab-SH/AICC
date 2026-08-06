@@ -1,0 +1,4 @@
+interface:
+  display_name: "브라우저 런처 복구"
+  short_description: "Chrome·Whale 런처의 앱·프로필·포트 복구"
+  default_prompt: "Use $repair-browser-launchers to audit and repair this Chrome or Whale launcher's exact identity."

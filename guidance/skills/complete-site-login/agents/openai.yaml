@@ -1,0 +1,4 @@
+interface:
+  display_name: "사이트 로그인 완료"
+  short_description: "기존 계정·자동완성·추가 인증으로 막힌 로그인을 안전하게 완료"
+  default_prompt: "Use $complete-site-login to continue this authorized login with the existing account, saved autofill or native password authentication, then verify the real signed-in destination."
