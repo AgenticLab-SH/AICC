@@ -9,6 +9,7 @@ import { ocxStatus } from '../src/adapters/ocx.mjs';
 import { ocxAccountStatus } from '../src/adapters/ocx-accounts.mjs';
 import { localToolStatus } from '../src/adapters/local-tools.mjs';
 import { webGptStatus } from '../src/adapters/web-gpt.mjs';
+import { codexRouteStatus } from '../src/adapters/codex-routes.mjs';
 
 test('account adapter accepts the masked cm JSON contract', async () => {
   const status = await accountStatus({
@@ -74,6 +75,34 @@ test('OCX adapter summarizes official read-only CLI data for the AICC dashboard'
   assert.equal(status.overview.rebootSafe, true);
   assert.equal(status.overview.requests30d, 12);
   assert.equal(status.overview.subagentCount, 1);
+  assert.equal(status.sections.providers.state, 'ready');
+  assert.deepEqual(status.sections.models.byProvider, [{ provider: 'unknown', count: 3 }]);
+  assert.equal(status.sections.usage.requests, 12);
+});
+
+test('Codex route adapter separates native, Web GPT, and OCX recovery readiness', async () => {
+  const files = new Map([
+    ['/codex/config.toml', 'openai_base_url = "http://127.0.0.1:17841/v1"\n'],
+    ['/codex/native.toml', 'openai_base_url = "https://chatgpt.com/backend-api/codex"\n']
+  ]);
+  const status = await codexRouteStatus({
+    configPath: '/codex/config.toml',
+    nativeConfigPath: '/codex/native.toml',
+    readFile: file => files.get(file),
+    webGptCli: 'web-gpt-fixture',
+    runCommand: async () => ({ ok: true, stdout: JSON.stringify({ installed: true, active: true }) }),
+    fetch: async url => ({
+      ok: true,
+      json: async () => String(url).includes('17841')
+        ? { status: 'ok', mode: 'full', accepting_turns: true, active_http_turns: 1, active_browser_turns: 2 }
+        : { ok: true, port: 10100 }
+    })
+  });
+  assert.equal(status.state, 'ready');
+  assert.equal(status.activeRoute, 'web-gpt');
+  assert.equal(status.nativeReady, true);
+  assert.equal(status.webGpt.activeTurns, 3);
+  assert.equal(status.ocx.healthy, true);
 });
 
 test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex route', async t => {

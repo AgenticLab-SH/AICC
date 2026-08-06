@@ -46,6 +46,10 @@ const openaiModelSummary = $('#openaiModelSummary');
 const openaiModelFilters = $('#openaiModelFilters');
 const openaiModelList = $('#openaiModelList');
 const openaiActionMessage = $('#openaiActionMessage');
+const ocxModules = $('#ocxModules');
+const supportMessage = $('#supportMessage');
+const copySupportPrompt = $('#copySupportPrompt');
+const copySupportJson = $('#copySupportJson');
 let confirmationToken = null;
 let catalog = { groups: [], items: [] };
 let statusData = null;
@@ -123,6 +127,33 @@ function formatBytes(value) {
   let unit = 0;
   while (amount >= 1024 && unit < units.length - 1) { amount /= 1024; unit += 1; }
   return `${amount.toFixed(amount >= 100 || unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function percent(value) {
+  return Number.isFinite(value) ? `${Math.round(value * 100)}%` : '–';
+}
+
+function routeLabel(route) {
+  return ({ 'web-gpt': '통합 Web GPT 브리지', ocx: 'OCX 직접 연결', native: 'Native Codex', custom: '사용자 지정 경로' })[route] || '알 수 없는 경로';
+}
+
+function renderOcxModules(ocx) {
+  const sections = ocx?.sections || {};
+  const cards = [
+    ['providers', 'Provider', sections.providers, `${sections.providers?.count ?? '–'}개 · 기본 ${sections.providers?.defaultProvider || '미확인'}`, (sections.providers?.items || []).map(item => item.name).filter(Boolean).join(' · ') || '목록 없음'],
+    ['models', '모델 catalog', sections.models, `${sections.models?.count ?? '–'}개`, (sections.models?.byProvider || []).map(item => `${item.provider} ${item.count}`).join(' · ') || 'Provider별 수량 미확인'],
+    ['usage', '30일 사용량', sections.usage, `${compactNumber(sections.usage?.requests)}회`, `token ${compactNumber(sections.usage?.totalTokens)} · 측정 ${percent(sections.usage?.coverageRatio)}`],
+    ['runtime', '런타임·시작', sections.runtime, sections.runtime?.serviceRunning ? '서비스 실행 중' : '서비스 확인 필요', `RSS ${formatBytes(sections.runtime?.rssBytes)} · 작업 ${sections.runtime?.activeTurns ?? '–'}개`],
+    ['agents', '하위 에이전트', sections.agents, `${sections.agents?.chosenCount ?? '–'}개 선택`, `모드 ${sections.agents?.multiAgentMode || '미확인'} · fallback ${sections.agents?.fallbackCount ?? '–'}`],
+    ['combos', 'Combo', sections.combos, `${sections.combos?.count ?? '–'}개`, 'failover · round-robin 가상 모델'],
+    ['storage', '저장소', sections.storage, formatBytes(sections.storage?.totalBytes), `${compactNumber(sections.storage?.fileCount)}개 파일 · 민감 경로 미표시`],
+    ['diagnostics', '진단', sections.diagnostics, sections.diagnostics?.warningCount === 0 ? '경고 없음' : `${sections.diagnostics?.warningCount ?? '–'}개 경고`, `${sections.diagnostics?.groupCount ?? '–'}개 진단 그룹`],
+    ['endpoints', '로컬 API', sections.endpoints, `${sections.endpoints?.endpointCount ?? '–'}개 endpoint`, sections.endpoints?.baseUrl || 'loopback endpoint 미확인']
+  ];
+  ocxModules.innerHTML = cards.map(([id, title, section, value, detail], index) => {
+    const ready = section?.state === 'ready';
+    return `<article class="ocx-module-card ${ready ? 'ready' : 'attention'}" data-ocx-module="${escapeHtml(id)}"><span>${String(index + 1).padStart(2, '0')}</span><div><strong>${escapeHtml(title)}</strong><b>${escapeHtml(value)}</b><small>${escapeHtml(detail)}</small></div><i>${ready ? '정상' : section?.state === 'timeout' ? '시간 초과' : '독립 실패'}</i></article>`;
+  }).join('');
 }
 
 function matchingTools(query) {
@@ -311,7 +342,7 @@ function renderStatus(data) {
   summary.textContent = `${data.summary.total}개 중 ${data.summary.ready}개 준비됨`;
   summaryHint.textContent = data.summary.attention ? `${data.summary.attention}개 항목을 확인해 주세요.` : '모든 핵심 연결이 정상입니다.';
   summaryPercent.textContent = `${percent}%`;
-  summaryRing.style.strokeDasharray = `${percent} ${100 - percent}`;
+  summaryRing.setAttribute('stroke-dasharray', `${percent} ${100 - percent}`);
   const date = new Date(data.generatedAt).toLocaleString('ko-KR');
   updatedAt.textContent = `마지막 확인 ${date}`;
   componentUpdated.textContent = date;
@@ -406,6 +437,22 @@ function renderStatus(data) {
   $('#ocxStartupState').textContent = ocxOverview.startupStatus ? `시작 보호 ${ocxOverview.startupStatus}` : '시작 보호 미확인';
   $('#ocxSubagentCount').textContent = Number.isInteger(ocxOverview.subagentCount) ? `${ocxOverview.subagentCount}개` : '–';
   $('#ocxMultiAgentMode').textContent = ocxOverview.multiAgentMode ? `모드 ${ocxOverview.multiAgentMode}` : '모드 미확인';
+  renderOcxModules(ocx);
+  const routes = data.components.find(component => component.id === 'codex-routes');
+  $('#codexRouteLabel').textContent = routeLabel(routes?.activeRoute);
+  $('#codexRouteState').textContent = routes?.state === 'ready' ? '복구 준비됨' : '확인 필요';
+  $('#codexRouteState').classList.toggle('attention', routes?.state !== 'ready');
+  $('#codexRouteDetail').textContent = routes?.detail || '모델 경로 상태를 확인할 수 없습니다.';
+  $('#nativeProfileState').textContent = routes?.nativeReady ? '공식 endpoint 검증됨' : '확인 필요';
+  $('#routeWebGptState').textContent = routes?.webGpt?.healthy ? `정상 · ${routes.webGpt.mode || '모드 미확인'}` : '연결 안 됨';
+  $('#routeOcxState').textContent = routes?.ocx?.healthy ? '정상 · 10100' : '연결 안 됨';
+  $('#routeActiveTurns').textContent = Number.isFinite(routes?.webGpt?.activeTurns) ? `${routes.webGpt.activeTurns}개` : '–';
+  const nativeButton = $('[data-action="codex.native.recover"]');
+  const bridgeButton = $('[data-action="codex.bridge.reconnect"]');
+  nativeButton.disabled = !routes?.nativeReady || routes?.activeRoute === 'native' || Number(routes?.webGpt?.activeTurns ?? 0) > 0;
+  nativeButton.title = routes?.activeRoute === 'native' ? '이미 Native Codex 경로입니다.' : '미리보기 후 공식 Native endpoint로 복구합니다.';
+  bridgeButton.disabled = !routes?.webGpt?.healthy || !routes?.webGpt?.acceptingTurns || routes?.activeRoute === 'web-gpt' || Number(routes?.webGpt?.activeTurns ?? 0) > 0;
+  bridgeButton.title = routes?.activeRoute === 'web-gpt' ? '이미 통합 모델 경로입니다.' : '17841 브리지가 정상일 때만 다시 연결합니다.';
   const ocxRunning = ocx?.state === 'ready';
   const ocxInstalled = ocx?.installed !== false;
   const startButton = $('[data-action="ocx.start"]');
@@ -494,7 +541,7 @@ function renderOpenaiUsage(data) {
   const groupCards = data.groups.map(group => `
     <article class="usage-group-card">
       <div class="usage-group-head"><div><h3>${escapeHtml(group.label)}</h3><p>${formatTokens(group.tokens)} / ${formatTokens(group.freeLimit)} token</p></div><strong>${group.percent}%</strong></div>
-      <div class="usage-meter" role="progressbar" aria-label="${escapeHtml(group.label)} 사용률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, group.percent)}"><span style="width:${Math.min(100, group.percent)}%"></span><i style="left:95%" title="로컬 하드 정지 95%"></i></div>
+      <div class="usage-meter"><progress aria-label="${escapeHtml(group.label)} 사용률" value="${Math.min(100, group.percent)}" max="100">${Math.min(100, group.percent)}%</progress><i title="로컬 하드 정지 95%"></i></div>
       <p class="usage-remaining">95% 하드 정지까지 ${formatTokens(group.hardRemaining)} token · 매일 00:00 UTC 초기화</p>
       <div class="model-usage-list">
         ${group.models.length ? group.models.map(model => `<div class="model-usage-row"><span><strong>${escapeHtml(model.model)}</strong><small>${formatTokens(model.requests)}회 · 입력 ${formatTokens(model.inputTokens)} · 캐시 ${formatTokens(model.cachedInputTokens)} · 출력 ${formatTokens(model.outputTokens)}</small></span><span><b>${formatTokens(model.totalTokens)}</b><small>${model.estimatedStandardCostUsd == null ? '가격 미등록' : `표준요금 환산 $${model.estimatedStandardCostUsd.toFixed(5)}`}</small></span></div>`).join('') : '<p class="empty-usage">아직 이 그룹의 guard 호출이 없습니다.</p>'}
@@ -528,20 +575,61 @@ async function loadStatus() {
   renderStatus(data);
 }
 
+async function runNamedTask(taskId) {
+  const item = catalog.items.find(candidate => candidate.taskId === taskId)
+    || { title: taskId, taskId };
+  return runTask(item);
+}
+
+async function copySupportBundle(includePrompt) {
+  supportMessage.textContent = '비밀을 제외한 진단 묶음을 만들고 있습니다.';
+  copySupportPrompt.disabled = true;
+  copySupportJson.disabled = true;
+  try {
+    const task = await postJson('/api/tasks/run', { taskId: 'support.bundle' }, { acceptFindings: true });
+    const payload = task.result || {};
+    const text = includePrompt
+      ? `${payload.consultationPrompt || '아래 진단을 분석해 주세요.'}\n\n\`\`\`json\n${JSON.stringify(payload, null, 2)}\n\`\`\``
+      : JSON.stringify(payload, null, 2);
+    await navigator.clipboard.writeText(text);
+    supportMessage.textContent = includePrompt ? '상담문과 진단 묶음을 복사했습니다.' : '진단 JSON을 복사했습니다.';
+  } catch (error) {
+    supportMessage.textContent = `복사하지 못했습니다: ${error.message}`;
+  } finally {
+    copySupportPrompt.disabled = false;
+    copySupportJson.disabled = false;
+  }
+}
+
 async function load() {
   refresh.disabled = true;
   refresh.classList.add('spinning');
   summary.textContent = '확인 중';
   try {
-    const [catalogResponse] = await Promise.all([fetch('/api/catalog', { cache: 'no-store' }), loadStatus(), loadOpenaiUsage()]);
-    const catalogData = await catalogResponse.json();
-    if (!catalogResponse.ok || !catalogData.ok) throw new Error(catalogData.error || `HTTP ${catalogResponse.status}`);
-    catalog = catalogData;
-    renderCatalog();
-  } catch (error) {
-    components.innerHTML = `<p class="error">상태를 확인하지 못했습니다: ${escapeHtml(error.message)}</p>`;
-    roots.innerHTML = '';
-    summary.textContent = '확인 실패';
+    const [catalogResult, statusResult, usageResult] = await Promise.allSettled([
+      fetch('/api/catalog', { cache: 'no-store' }).then(async response => {
+        const data = await response.json();
+        if (!response.ok || !data.ok) throw new Error(data.error || `HTTP ${response.status}`);
+        return data;
+      }),
+      loadStatus(),
+      loadOpenaiUsage()
+    ]);
+    if (catalogResult.status === 'fulfilled') {
+      catalog = catalogResult.value;
+      renderCatalog();
+    } else {
+      toolLibrary.innerHTML = `<p class="error">도구 목록만 불러오지 못했습니다: ${escapeHtml(catalogResult.reason.message)}</p>`;
+    }
+    if (statusResult.status === 'rejected') {
+      components.innerHTML = `<p class="error">상태 API를 확인하지 못했습니다: ${escapeHtml(statusResult.reason.message)}</p>`;
+      roots.innerHTML = '';
+      summary.textContent = '상태 확인 실패';
+    }
+    if (usageResult.status === 'rejected') {
+      openaiUsageGroups.innerHTML = `<p class="error">OpenAI API 구역만 확인하지 못했습니다: ${escapeHtml(usageResult.reason.message)}</p>`;
+      openaiUsageUpdated.textContent = '독립 구역 확인 실패';
+    }
   } finally {
     refresh.disabled = false;
     refresh.classList.remove('spinning');
@@ -555,9 +643,13 @@ $('#workspacePreflight').addEventListener('click', () => {
   const item = catalog.items.find(candidate => candidate.id === 'workspace-publish');
   if (item) runTask(item);
 });
+copySupportPrompt.addEventListener('click', () => copySupportBundle(true));
+copySupportJson.addEventListener('click', () => copySupportBundle(false));
 document.addEventListener('click', event => {
   const actionButton = event.target.closest('[data-action]');
   if (actionButton) previewAction(actionButton.dataset.action);
+  const diagnosticButton = event.target.closest('[data-diagnostic-task]');
+  if (diagnosticButton) runNamedTask(diagnosticButton.dataset.diagnosticTask);
   const toolButton = event.target.closest('[data-tool-run]');
   if (toolButton) {
     const item = catalog.items.find(candidate => candidate.id === toolButton.dataset.toolRun);

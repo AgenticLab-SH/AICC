@@ -6,7 +6,7 @@ Tunnel key, 브라우저 프로필과 인증 자료는 저장소에 기록하지
 
 ## 2026-08-06 검증 스냅샷
 
-- AICC 대시보드 `127.0.0.1:4381`: 10개 구성요소 모두 ready
+- AICC 대시보드 `127.0.0.1:4381`: 11개 구성요소와 독립 adapter 상태 표시
 - OCX `127.0.0.1:10100`: health 정상, 기존 Codex 작업 유지 중
 - AICC 원격 작업공간 MCP: Git 워크스페이스 39개, Secure Tunnel healthy/ready
 - Business 앱 `AICC Workspace`: 13개 action으로 새로 고침 완료
@@ -94,6 +94,23 @@ Web GPT, Workspace MCP, 브라우저와 지침 상태를 한 화면에서 읽는
 아이디어만 참고한 소스를 분리해 볼 수 있다. `Obsidian Canvas 받기`로 공개 JSON
 Canvas 파일을 내려받을 수 있으며 Obsidian 플러그인 설치는 필요 없다.
 
+`OCX` 구역은 OCX 웹 페이지의 DOM이나 디자인을 복사하지 않는다. AICC adapter가
+공식 OCX CLI의 JSON 명령으로 provider, 모델, 사용량, 런타임, 에이전트, 저장소,
+진단과 endpoint를 각각 생성해 표시한다. OCX 응답 형식이 바뀌거나 한 명령이 실패하면
+그 카드만 `독립 실패`로 표시하고 다른 AICC 구역과 정적 페이지는 계속 작동한다.
+
+`문제해결` 구역에서는 Native 복구 프로필, Web GPT 17841, OCX 10100과 진행 중
+Web 작업 수를 따로 본다. 읽기 전용 점검과 비밀 제외 상담 묶음 복사는 즉시 실행할 수
+있다. 경로 변경 버튼은 미리보기, 일회용 확인, 상태 재검증과 rollback을 거치며 진행 중
+Web 작업이 있으면 비활성화된다.
+
+```bash
+aicc task run routes.status --json
+aicc task run web-gpt.doctor --json
+aicc task run ocx.diagnostics --json
+aicc task run support.bundle --json
+```
+
 ## Codex Desktop에서 Web GPT 사용
 
 설정과 로그인이 끝나면 모델 선택기에 다음 8개 비-Pro 모델이 나타난다.
@@ -177,6 +194,22 @@ Desktop을 다시 열어야 한다. 활성 작업 중에는 다음 명령을 자
 ```bash
 ocx restore       # Native 복구
 ocx restore back  # OCX 복귀 전 10100 health 확인 필요
+```
+
+CLI를 외우지 않아도 AICC `문제해결`에서 `Native Codex 긴급 복구`를 미리보고
+실행할 수 있다. 이 action은 공식 Native profile이 검증되고 Web GPT 활성 작업이
+0개일 때만 `ocx restore`를 실행한다. 실패하면 실행 전 Web GPT 또는 OCX 경로로
+되돌린다. `통합 모델 경로 다시 연결`은 17841 health와 turn 수를 확인한 뒤
+`codex-chatgpt-web route connect`를 실행하고 실패 시 이전 Native/OCX 경로를
+복원한다. 어느 경로 변경이든 완료 뒤 Codex Desktop을 완전히 종료하고 다시 연다.
+
+AICC 자체는 이 세 모델 경로와 독립된 loopback LaunchAgent다. 17841이나 10100이
+고장 나도 정적 대시보드와 정상 adapter 구역, 문제해결 진단은 열려 있어야 한다.
+단, macOS 로그인 서비스 자체가 내려간 경우에는 아래 설치기로 4381을 복구한다.
+
+```bash
+node tools/platform/dashboard/install-launch-agent.mjs
+curl -fsS http://127.0.0.1:4381/healthz
 ```
 
 Web GPT setup은 기존 loopback upstream과 catalog를 읽어 10100 OCX route를 자동

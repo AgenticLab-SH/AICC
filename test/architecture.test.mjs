@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import test from 'node:test';
 
 const html = fs.readFileSync(new URL('../public/index.html', import.meta.url), 'utf8');
+const client = fs.readFileSync(new URL('../public/app.js', import.meta.url), 'utf8');
 const canvas = JSON.parse(fs.readFileSync(new URL('../public/aicc-architecture.canvas', import.meta.url), 'utf8'));
 const cutover = fs.readFileSync(new URL('../tools/platform/chatgpt/Complete-WebGptFullSetup.mjs', import.meta.url), 'utf8');
 
@@ -30,10 +31,26 @@ test('source lineage distinguishes runtime dependencies from reference-only sour
 });
 
 test('dashboard exposes the OCX operation modules without copying credentials', () => {
-  for (const route of ['dashboard', 'startup', 'providers', 'models', 'combos', 'subagents', 'logs', 'usage']) {
-    assert.match(html, new RegExp(`http://127\\.0\\.0\\.1:10100/#${route}`));
-  }
+  assert.match(html, /id="ocxModules"/);
+  assert.match(html, /각 구역은 OCX 공식 CLI JSON을 독립적으로 읽습니다/);
+  assert.match(html, /http:\/\/127\.0\.0\.1:10100\/#dashboard/);
   assert.match(html, /AICC는 OCX 자격증명을 복제하지 않습니다/);
+});
+
+test('dashboard exposes isolated recovery and support controls', () => {
+  assert.match(html, /id="troubleshoot"/);
+  assert.match(html, /data-action="codex\.native\.recover"/);
+  assert.match(html, /data-action="codex\.bridge\.reconnect"/);
+  assert.match(html, /data-diagnostic-task="web-gpt\.doctor"/);
+  assert.match(html, /id="copySupportPrompt"/);
+});
+
+test('dashboard dynamic meters remain compatible with the strict style CSP', () => {
+  assert.match(html, /rel="icon" href="\/favicon\.svg"/);
+  assert.match(client, /setAttribute\('stroke-dasharray'/);
+  assert.match(client, /<progress aria-label=/);
+  assert.doesNotMatch(client, /style=/);
+  assert.doesNotMatch(client, /\.style\./);
 });
 
 test('downloadable JSON Canvas has valid node and edge references', () => {
