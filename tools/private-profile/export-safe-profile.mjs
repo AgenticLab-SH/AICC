@@ -12,9 +12,20 @@ const output = path.resolve(process.argv[2] ?? path.join(projectRoot, 'runtime',
 
 function portableText(value) {
   return redactText(String(value ?? ''))
+    .replaceAll(projectRoot, '${HOME}/dev/projects/tools/AICC')
     .replaceAll(home, '${HOME}')
     .replace(/^\s*(?:api[-_]?key|access[-_]?token|refresh[-_]?token|password|secret|credential|cookie)\s*=.*$/gim,
       '# secret omitted; restore through login or the operating-system secret store');
+}
+
+function portableCodexConfig(value) {
+  const generatedSections = /^(marketplaces\.|tui\.model_availability_nux$)/;
+  let skip = false;
+  return portableText(value).split(/\r?\n/).filter(line => {
+    const section = line.match(/^\[([^\]]+)\]\s*$/)?.[1];
+    if (section) skip = generatedSections.test(section);
+    return !skip;
+  }).join('\n').trim();
 }
 
 function write(relative, value, mode = 0o600) {
@@ -35,14 +46,14 @@ function command(commandName, args = []) {
 function namesAt(root) {
   if (!fs.existsSync(root)) return [];
   return fs.readdirSync(root, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() || entry.isSymbolicLink())
-    .map(entry => entry.name).sort();
+    .filter(entry => entry.isDirectory() || entry.isSymbolicLink() || entry.isFile())
+    .map(entry => entry.isFile() ? entry.name.replace(/\.[^.]+$/, '') : entry.name).sort();
 }
 
 fs.mkdirSync(output, { recursive: true, mode: 0o700 });
 
 const codexConfig = readIfPresent(path.join(home, '.codex', 'config.toml'));
-if (codexConfig) write('profile/codex/config.portable.toml', portableText(codexConfig));
+if (codexConfig) write('profile/codex/config.portable.toml', portableCodexConfig(codexConfig));
 
 const coordination = readIfPresent(path.join(home, '.ai-control-center', 'guidance', 'coordination.toml'));
 if (coordination) write('profile/aicc/coordination.portable.toml', portableText(coordination));
