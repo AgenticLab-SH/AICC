@@ -72,6 +72,22 @@ test('Web GPT adapter distinguishes a healthy bridge from an inactive Codex rout
   assert.equal(status.localHarnessConsumesModelTokens, false);
 });
 
+test('Web GPT adapter does not claim local harness tools in browser-only mode', async t => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'aicc-web-gpt-browser-only-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const configPath = path.join(root, 'config.json');
+  const codexConfigPath = path.join(root, 'codex.toml');
+  fs.writeFileSync(configPath, JSON.stringify({ port: 17841, releaseVersion: '2.0.0', mode: 'browser-only' }));
+  fs.writeFileSync(codexConfigPath, 'openai_base_url = "http://127.0.0.1:17841/v1"\n');
+  const status = await webGptStatus({
+    configPath, codexConfigPath, appPath: path.join(root, 'missing.app'),
+    fetch: async () => ({ ok: true, json: async () => ({ status: 'ok', version: '2.0.0' }) })
+  });
+  assert.equal(status.state, 'ready');
+  assert.match(status.detail, /로컬 도구는 전체 하네스 MCP/);
+  assert.doesNotMatch(status.detail, /도구 하네스가 연결/);
+});
+
 test('OCX account adapter exposes only safe account metadata', async () => {
   const status = await ocxAccountStatus({
     executable: 'ocx-fixture',

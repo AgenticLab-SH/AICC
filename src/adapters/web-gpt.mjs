@@ -60,7 +60,9 @@ export async function webGptStatus(options = {}) {
         ? '브리지가 설치됐지만 현재 응답하지 않습니다.'
         : !routeActive
           ? '브리지는 실행 중이지만 Codex 모델 경로가 아직 연결되지 않았습니다.'
-          : 'Web GPT 모델과 Codex 도구 하네스가 연결되어 있습니다.',
+          : mode === 'full'
+            ? 'Web GPT 모델과 Codex 도구 하네스가 연결되어 있습니다.'
+            : 'Web GPT 모델이 연결되어 있습니다. 로컬 도구는 전체 하네스 MCP를 구성한 뒤 사용할 수 있습니다.',
     installed,
     healthy,
     routeActive,

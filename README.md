@@ -19,8 +19,9 @@ ChatGPT Web -> OpenAI Secure MCP Tunnel -> AICC Workspace MCP
 
 Codex Desktop에서는 `Web / 임시|저장 / 낮음~매우 높음` 모델을 선택해 ChatGPT
 Web을 추론 백엔드로 쓸 수 있습니다. Web 모델의 추론은 OCX나 로컬 Codex 모델
-토큰을 사용하지 않고, 현재 Codex 작업은 파일·터미널·승인·도구 하네스를
-제공합니다. 외부 ChatGPT에서 로컬을 편집하는 별도 경로는 `AICC Workspace MCP`가
+토큰을 사용하지 않습니다. 브라우저 전용 모드는 문맥·이미지만 전달하고, 별도 MCP
+설정을 마친 전체 하네스 모드에서만 현재 Codex 작업의 파일·터미널·승인·도구를
+사용합니다. 외부 ChatGPT에서 로컬을 편집하는 별도 경로는 `AICC Workspace MCP`가
 담당하며 Codex 작업을 생성하거나 OCX를 호출하지 않습니다.
 
 현재 검증 상태, 일상 사용법과 기존 질문의 최종 답은
